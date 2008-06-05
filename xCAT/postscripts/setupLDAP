@@ -20,21 +20,21 @@ if [ -r /etc/ldap.conf -a -r /etc/resolv.conf ]
             )
 
             echo "uri ldap://$MASTER/
-  base $DC
-  timelimit 120
-  bind_timelimit 120
-  idle_timelimit 3600
-  nss_base_passwd ou=People,$DC
-  nss_base_shadow ou=People,$DC
-  nss_base_group  ou=Group,$DC
-  nss_initgroups_ignoreusers root,ldap,named,avahi,haldaemon,dbus,radvd,tomcat,radiusd,news,mailman,nscd
-  ssl no
-  tls_cacertdir /etc/openldap/cacerts
-  pam_password md5" >/etc/ldap.conf
+base $DC
+timelimit 120
+bind_timelimit 120
+idle_timelimit 3600
+nss_base_passwd ou=People,$DC
+nss_base_shadow ou=People,$DC
+nss_base_group  ou=Group,$DC
+nss_initgroups_ignoreusers root,ldap,named,avahi,haldaemon,dbus,radvd,tomcat,radiusd,news,mailman,nscd
+ssl no
+tls_cacertdir /etc/openldap/cacerts
+pam_password md5" >/etc/ldap.conf
 
             echo "URI ldap://$MASTER
-  BASE $DC
-  TLS_CACERTDIR /etc/openldap/cacerts" >/etc/openldap/ldap.conf
+BASE $DC
+TLS_CACERTDIR /etc/openldap/cacerts" >/etc/openldap/ldap.conf
 
   cd /etc
   cp nsswitch.conf nsswitch.conf.ORIG
