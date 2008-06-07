@@ -11,7 +11,7 @@
 %endif
 BuildArch: noarch
 %define name	xCAT-nbroot-core-%{tarch}
-Release: %(date +"%Y%m%d%H%M")
+Release: %(date +"%Y%m%d")
 Epoch: 1
 AutoReq: false
 Prefix: /opt/xcat

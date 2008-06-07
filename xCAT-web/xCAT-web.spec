@@ -1,7 +1,7 @@
 Summary: Web Interface for xCAT
 Name: xCAT-web
 Version: 2.0.1
-Release: %(date +"%Y%m%d%H%M")
+Release: %(date +"%Y%m%d")
 Epoch: 1
 
 License: EPL
