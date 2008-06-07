@@ -5,7 +5,7 @@ Release: %(date +"%Y%m%d%H%M")
 Epoch: 1
 License: EPL
 Group: System Environment/Libraries
-Source: perl-xCAT-2.0.1.tar.gz
+Source: perl-xCAT-%{version}.tar.gz
 Packager: IBM Corp.
 Vendor: IBM Corp.
 Distribution: %{?_distribution:%{_distribution}}%{!?_distribution:%{_vendor}}
@@ -21,8 +21,8 @@ Provides: perl(xCAT) = %{version}
 Provides perl xCAT libraries for core functionality.  Required for all xCAT installations.
 Includes xCAT::Table, xCAT::NodeRange, among others.
 
-%prep
-%setup -q
+%prep -n perl-xCAT
+%setup -q -n perl-xCAT
 %build
 # This phase is done in (for RH): /usr/src/redhat/BUILD/perl-xCAT-2.0
 # All of the tarball source has been unpacked there and is in the same file structure
