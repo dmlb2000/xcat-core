@@ -5,7 +5,7 @@ Release: %(date +"%Y%m%d%H%M")
 Epoch: 1
 License: EPL
 Group: System Environment/Libraries
-Source: xCAT-rmc-2.0.tar.gz
+Source: xCAT-rmc-2.0.1.tar.gz
 Packager: IBM Corp.
 Vendor: IBM Corp.
 Distribution: %{?_distribution:%{_distribution}}%{!?_distribution:%{_vendor}}
