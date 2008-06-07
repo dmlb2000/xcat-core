@@ -1,7 +1,8 @@
 Summary: Core executables and data of the xCAT management project
 Name: xCAT-client
 Version: 2.0.1
-Release: snap%(date +"%Y%m%d%H%M")
+Release: %(date +"%Y%m%d%H%M")
+Epoch: 1
 License: EPL
 Group: Applications/System
 Source: xCAT-client-2.0.tar.gz

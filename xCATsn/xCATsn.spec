@@ -1,7 +1,8 @@
 Summary: Metapackage for a common, default xCAT service node setup
 Name: xCATsn
 Version: 2.0.1
-Release: snap%(date +"%Y%m%d%H%M")
+Release: %(date +"%Y%m%d%H%M")
+Epoch: 1
 License: EPL
 Group: Applications/System
 Vendor: IBM Corp.
