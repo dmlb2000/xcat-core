@@ -11,6 +11,7 @@ use xCAT::Usage;
 # Parse the command line for options and operands 
 ##########################################################################
 sub parse_args {
+
     my $request = shift;
     my %opt     = ();
     my $cmd     = $request->{command};
@@ -205,6 +206,11 @@ sub rnetboot {
         m => $o->{mac}
     );
     #####################################
+    # Strip colons from mac address 
+    #####################################
+    $opt{m} =~ s/://g;
+
+    #####################################
     # Force LPAR shutdown 
     #####################################
     if ( exists( $options->{f} )) { 
@@ -259,7 +265,7 @@ sub rnetboot {
                            $d,
                            \%opt );
     }
-    my $Rc = shift(@$result);
+    $Rc = shift(@$result);
 
     ##################################
     # Form string from array results
@@ -330,6 +336,7 @@ sub rnetboot {
  
 
 1;
+
 
 
 
