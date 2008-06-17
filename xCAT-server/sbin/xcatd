@@ -291,6 +291,7 @@ if ($inet6support) {
   my $client;
   my $peerhost;
   my %packets;
+  my $actualpid=$$;
   until ($quit) {
     eval { 
 	while (1) {	
@@ -340,6 +341,9 @@ if ($inet6support) {
     };
     if ($@) {
       syslog("local4|err","xcatd: possible BUG encountered by xCAT UDP service: ".$@);
+    }
+    unless ($actualpid == $$) { #We should absolutely never be here, exponential growth from a plugin crash.
+        exit 1;
     }
   }
 }
