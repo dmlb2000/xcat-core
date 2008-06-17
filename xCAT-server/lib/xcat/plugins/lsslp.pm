@@ -14,14 +14,6 @@ if ($^O =~ /^linux/i) {
 }
 use xCAT::PPCdb;
 
-#######################################
-# Perl::SNMP not working on AIX yet
-#######################################
-if ($^O =~ /^linux/i) {
-  eval { require xCAT::MacMap };
-  eval { require xCAT_plugin::blade };
-}
-
 
 #######################################
 # Constants
@@ -102,19 +94,13 @@ my @attribs    = qw(nodetype model serial groups node mgt mpa id);
 my $verbose    = 0;
 my %ip_addr    = ();
 my %slp_result = ();
-my %rsp_result = ();
 my %opt        = ();
-my $macmap;
 
 
 ##########################################################################
 # Command handler method from tables
 ##########################################################################
 sub handled_commands {
-
-    if ($^O =~ /^linux/i) {
-        $macmap = xCAT::MacMap->new();
-    } 
     return( {lsslp=>"lsslp"} );
 }
 
@@ -158,7 +144,8 @@ sub send_msg {
 sub parse_args {
 
     my $request  = shift;
-    my @VERSION  = qw( 2.0 );
+    my $args     = $request->{arg};
+    my $cmd      = $request->{command};
     my %services = (
         HMC => SOFTWARE_SERVICE.":".SERVICE_HMC.":",
         IVM => SOFTWARE_SERVICE.":".SERVICE_IVM.":",
@@ -167,27 +154,12 @@ sub parse_args {
         RSA => HARDWARE_SERVICE.":".SERVICE_RSA.":",
         MM  => HARDWARE_SERVICE.":".SERVICE_MM.":" 
     );
-    my $types = join( "|", keys %services );
-    my $args  = $request->{arg};
-
     #############################################
-    # Responds with usage statement                   
+    # Responds with usage statement
     #############################################
     local *usage = sub {
-        my @msg = ( $_[0],
-          "lsslp  -h|--help",
-          "lsslp  -v]--version",
-          "lsslp [-V|--verbose][-b ip[,ip..]][-w][-r|-x|-z][-s $types]",
-          "    -b   IP(s) the command will broadcast out.",
-          "    -h   writes usage information to standard output.",
-          "    -r   raw slp response.",
-          "    -s   service type interested in discovering.",
-          "    -v   command version.",
-          "    -V   verbose output.",
-          "    -w   writes output to xCat database.",
-          "    -x   xml formatted output.",
-          "    -z   stanza formatted output.");
-        send_msg( $request, 1, @msg );
+        my $usage_string = xCAT::Usage->getUsage($cmd);
+        return( [$_[0], $usage_string] );
     };
     #############################################
     # No command-line arguments - use defaults
@@ -208,36 +180,19 @@ sub parse_args {
     # Process command-line flags
     #############################################
     if (!GetOptions(\%opt, qw(h|help V|Verbose v|version b=s x z w r s=s))) { 
-        usage();
-        return(1);
-    }
-    #############################################
-    # Option -h for Help
-    #############################################
-    if ( exists( $opt{h} )) {
-        usage();
-        return(1);
-    }
-    #############################################
-    # Option -v for version
-    #############################################
-    if ( exists( $opt{v} )) {
-        send_msg( $request, 0, @VERSION );
-        return(1);
+        return( usage() );
     }
     #############################################
     # Check for switch "-" with no option
     #############################################
     if ( grep(/^-$/, @ARGV )) {
-        usage( "Missing option: -" );
-        return(1);
+        return(usage( "Missing option: -" ));
     }
     #############################################
     # Check for an argument
     #############################################
     if ( defined( $ARGV[0] )) {
-        usage( "Invalid Argument: $ARGV[0]" );
-        return(1);
+        return(usage( "Invalid Argument: $ARGV[0]" ));
     }
     #############################################
     # Option -V for verbose output
@@ -249,16 +204,14 @@ sub parse_args {
     # Check for mutually-exclusive formatting 
     #############################################
     if ( (exists($opt{r}) + exists($opt{x}) + exists($opt{z})) > 1 ) {
-        usage();
-        return(1);
+        return( usage() );
     }
     #############################################
     # Check for unsupported service type 
     #############################################
     if ( exists( $opt{s} )) {
         if ( !exists( $services{$opt{s}} )) {
-            usage( "Invalid service: $opt{s}" );
-            return(1);
+            return(usage( "Invalid service: $opt{s}" ));
         }
         $request->{service} = $services{$opt{s}}; 
     }
@@ -480,37 +433,6 @@ sub invoke_cmd {
     my $tries    = 5;
 
     ########################################
-    # Telnet (rspconfig) command  
-    ########################################
-    if ( !defined( $services )) {
-        my $mm = $args->{$ip};
-        my @cmds = (
-            "snmpcfg=enable",
-            "sshcfg=enable",
-            "network_reset=$mm->{args}"
-        );
-        if ( $verbose ) {
-            trace( $request, "Forked: ($ip)->($mm->{args})" );
-        }
-        my $result = xCAT_plugin::blade::telnetcmds(
-                          $ip,
-                          $mm->{username},
-                          $mm->{password},
-                          0,
-                          @cmds );
- 
-        ####################################
-        # Pass result array back to parent
-        ####################################
-        my @data = ("RSPCONFIG6sK4ci", $ip, @$result[0], @$result[2]);
-        my $out = $request->{pipe};
-
-        print $out freeze( \@data );
-        print $out "\nENDOFFREEZE6sK4ci\n";
-        return;
-    }
-
-    ########################################
     # SLP broadcast command  
     ########################################
     my $result = runslp($args, $ip, $services, $request, $tries, $converge);
@@ -677,7 +599,6 @@ sub runslp {
 }
 
 
-
 ##########################################################################
 # Formats slp responses
 ##########################################################################
@@ -690,14 +611,9 @@ sub format_output {
     my $result;
 
     ###########################################
-    # Query switch ports
-    ###########################################
-    my $mm = switch_cmd( $request, $values );
-
-    ###########################################
     # Parse responses and add to hash
     ###########################################
-    my $outhash = parse_responses( $request, $values, $mm, \$length );
+    my $outhash = parse_responses( $request, $values, \$length );
 
     ###########################################
     # No responses 
@@ -888,7 +804,6 @@ sub parse_responses {
 
     my $request = shift;
     my $values  = shift;
-    my $mm      = shift;
     my $length  = shift;
 
     my %outhash = ();
@@ -979,22 +894,6 @@ sub parse_responses {
         ###########################################
         $rsp =~ /.*URL: (.*)\nATTR: +(.*)/;
 
-        ###########################################
-        # If MM, use the discovered host
-        ###########################################
-        if (( $type eq SERVICE_MM ) and ( defined( $mm ))) {
-            my $ip = getip_from_url( $request, $1 );
-
-            if ( defined( $ip )) {
-                if ( exists( $mm->{$ip}->{args} )) {
-                    $mm->{$ip}->{args} =~ /^.*,(.*)$/; 
-                    $host = $1;
-                }
-            }   
-        }
-        ###########################################
-        # Get host directly from URL
-        ###########################################
         if ( !defined($host) ) {
             $host = gethost_from_url( $request, $1 );
             if ( !defined( $host )) {
@@ -1378,16 +1277,6 @@ sub child_response {
                 next;
             }
             #############################
-            # rspconfig results
-            #############################
-            if ( @$responses[0] =~ /^RSPCONFIG6sK4ci$/ ) {
-                shift @$responses;
-                my $ip = shift(@$responses);
-
-                $rsp_result{$ip} = $responses;
-                next;
-            }
-            #############################
             # Message or verbose trace
             #############################
             foreach ( @$responses ) {
@@ -1411,19 +1300,26 @@ sub child_response {
 sub preprocess_request {
 
     my $req = shift;
-    my $cb  = shift;
     if ($req->{_xcatdest}) { return [$req]; }    #exit if preprocessed
+    my $callback=shift;
+    my @requests;
 
-    ###########################################
-    # Parse command-line options
-    ###########################################
-    my %request;
-    $request{arg} = $req->{arg};
-    $request{callback} = $cb;
-    if ( parse_args( \%request )) {
-        return(1);
+    ####################################
+    # Prompt for usage if needed
+    ####################################
+    my $noderange = $req->{node}; #Should be arrayref
+    my $command = $req->{command}->[0];
+    my $extrargs = $req->{arg};
+    my @exargs=($req->{arg});
+    if (ref($extrargs)) {
+        @exargs=@$extrargs;
     }
-
+    my $usage_string=xCAT::Usage->parseCommand($command, @exargs);
+    if ($usage_string) {
+        $callback->({data=>[$usage_string]});
+        $req = {};
+        return;
+    }
     ###########################################
     # find all the service nodes for xCAT cluster
     # build an individual request for each service node
@@ -1448,310 +1344,6 @@ sub preprocess_request {
 
 
 ##########################################################################
-# Match SLP IP/ARP MAC/Switch table port to actual switch data 
-##########################################################################
-sub switch_cmd {
-
-    my $req = shift;
-    my $slp = shift;
-    my %mm;
-    my %slp;
-    my %hosts;
-    my @entries;
-    my $hosttab  = xCAT::Table->new( 'hosts' );
-    my $swtab    = xCAT::Table->new( 'switch' );
-
-    ###########################################
-    # No tables
-    ###########################################
-    if ( !defined($swtab) or !defined($hosttab) ) {
-        return;
-    }
-    ###########################################
-    # Any MMs in SLP response
-    ###########################################
-    foreach ( @$slp ) {
-        if ( /\(type=management-module\)/ and /\(ip-address=([^\),]+)/) {
-           $slp{$1} = undef;
-        }
-    }
-    ###########################################
-    # No MMs in response
-    ###########################################
-    if ( !%slp ) {
-        return;
-    }
-    ###########################################
-    # Any entries in switch table
-    ###########################################
-    foreach ( $swtab->getAllNodeAttribs([qw(node)]) ) {
-        push @entries, $_->{node};
-    }
-    ###########################################
-    # Any entries in hosts table
-    ###########################################
-    if ( $verbose ) {
-        trace( $req, "SWITCH/HOSTS TABLE:" );
-    }
-    foreach ( @entries ) {
-        my $ent = $hosttab->getNodeAttribs($_,[qw(ip)]);
-        if ( !$ent ) {
-            next;
-        }
-        $hosts{$_} = $ent->{ip};
-        if ( $verbose ) {
-            trace( $req, "\t\t($_)->($ent->{ip})" );
-        }
-    }
-    ###########################################
-    # No MMs in hosts/switch table 
-    ###########################################
-    if ( !%hosts ) {
-        return;
-    }
-    ###########################################
-    # Ping each MM to update arp table 
-    ###########################################
-    foreach my $ip ( keys %slp ) {
-        my $cmd = `ping -c 1 -w 0 $ip`;
-    }    
-    ###########################################
-    # Match discovered IP to MAC in arp table
-    ###########################################
-    my $arp = `/sbin/arp -n`;
-    my @arpents = split /\n/, $arp;
-
-    if ( $verbose ) {
-        trace( $req, "ARP TABLE:" );
-    }
-    foreach ( @arpents ) {
-        /^(\S+)+\s+\S+\s+(\S+)\s/;
-        if ( exists( $slp{$1} )) {
-            if ( $verbose ) {
-                trace( $req, "\t\t($1)->($2)" );
-            }
-            $slp{$1} = $2;
-        }
-    }
-    ###########################################
-    # No discovered IP - MAC matches 
-    ###########################################
-    if ( !grep( defined($_), values %slp )) {
-        return;
-    }
-    if ( $verbose ) {
-        trace( $req, "getting switch information...." );
-    }
-    foreach my $ip ( keys %slp ) {
-        #######################################
-        # Not in SLP response
-        #######################################
-        if ( !defined( $slp{$ip} ) or !defined( $macmap )) { 
-            next;
-        }
-        #######################################
-        # Get node from switch 
-        #######################################
-        my $name = $macmap->find_mac( $slp{$ip} );
-        if ( !defined( $name )) {
-            if ( $verbose ) {
-                trace( $req, "\t\t($slp{$ip})-> NOT FOUND" ); 
-            }
-            next;
-        }
-        if ( $verbose ) {
-            trace( $req, "\t\t($slp{$ip})-> $name" ); 
-        }
-        #######################################
-        # In hosts table 
-        #######################################
-        if ( defined( $hosts{$name} )) {
-            if ( $ip eq $hosts{$name} ) {
-                if ( $verbose ) {
-                    trace( $req, "MM already set '$ip' - skipping" );
-                }
-                next;
-            }
-            $mm{$ip}->{args} = "$hosts{$name},$name";
-        }
-    }
-    ###########################################
-    # No MMs   
-    ###########################################
-    if ( !%mm ) {
-        if ( $verbose ) {
-            trace( $req, "No ARP-Switch-SLP matches found" ); 
-        }
-        return;
-    }
-    ###########################################
-    # Update MM hardware w/discovery info
-    ###########################################
-    my $result = rspconfig( $req, \%mm );
-    return( $result );
-}
-
-
-
-##########################################################################
-# Run rspconfig against MMs
-##########################################################################
-sub rspconfig {
-
-    my $request   = shift;
-    my $mm        = shift;
-    my $callback  = $request->{callback};
-    my $bladeuser = 'USERID';
-    my $bladepass = 'PASSW0RD';
-    my $start;
-
-    if ( $verbose ) {
-        trace( $request, "telneting to management-modules....." );
-        $start = Time::HiRes::gettimeofday();
-    }
-    #############################################
-    # Check passwd table for userid/password
-    #############################################
-    my $passtab = xCAT::Table->new('passwd');
-    if ( $passtab ) {
-        my ($ent) = $passtab->getAttribs({key=>'blade'},'username','password');
-        if ( defined( $ent )) {
-            $bladeuser = $ent->{username};
-            $bladepass = $ent->{password};
-        }
-    }
-    #############################################
-    # Get MM userid/password
-    #############################################
-    my $mpatab = xCAT::Table->new('mpa');
-    foreach ( keys %$mm ) {
-        my $user = $bladeuser;
-        my $pass = $bladepass;
-
-        if ( defined( $mpatab )) {
-            my ($ent) = $mpatab->getAttribs({mpa=>$_},'username','password');
-            if ( defined( $ent->{password} )) { $pass = $ent->{password}; } 
-            if ( defined( $ent->{username} )) { $user = $ent->{username}; } 
-        }
-        $mm->{$_}->{username} = $user;
-        $mm->{$_}->{password} = $pass;
-    }
-    
-    #############################################
-    # Fork one process per MM 
-    #############################################
-    my $children = 0;
-    $SIG{CHLD} = sub { while (waitpid(-1, WNOHANG) > 0) { $children--; } };
-    my $fds = new IO::Select;
-   
-    foreach my $ip ( keys %$mm ) {
-        my $pipe = fork_cmd( $request, $ip, $mm );
-        if ( $pipe ) {
-            $fds->add( $pipe );
-            $children++;
-        }
-    }
-    #############################################
-    # Process responses from children
-    #############################################
-    while ( $children > 0 ) {
-        child_response( $callback, $fds );
-    }
-    while (child_response($callback,$fds)) {}
-
-    if ( $verbose ) {
-        my $elapsed = Time::HiRes::gettimeofday() - $start;
-        my $msg = sprintf( "Total rspconfig Time: %.3f sec\n", $elapsed );
-        trace( $request, $msg );
-    }
-    
-    foreach my $ip ( keys %rsp_result ) {
-        #################################
-        # Error logging on to MM
-        #################################
-        my $result = $rsp_result{$ip};
-        my $Rc = shift(@$result);
-
-        if ( $Rc != SUCCESS ) {
-            #############################
-            # MM connect error
-            #############################
-            if ( ref(@$result[0]) ne 'ARRAY' ) {
-                if ( $verbose ) {
-                    trace( $request, "$ip: @$result[0]" );
-                }
-                delete $mm->{$ip};
-                next;
-            } 
-        }        
-        ##################################
-        # Process each response
-        ##################################
-        foreach ( @{@$result[0]} ) {
-            if ( $verbose ) {
-                trace( $request, "$ip: $_" );
-            }
-            /^(\S+)\s+(\d+)/;
-            my $cmd = $1;
-            $Rc = $2;
-
-            if ( $cmd =~ /^network_reset/ ) {
-                if ( $Rc != SUCCESS ) {
-                    delete $mm->{$ip};
-                    next;
-                }
-                if ( $verbose ) {
-                    trace( $request,"Resetting management-module ($ip)...." );
-                }
-            }
-        }
-    }
-    ######################################
-    # Update etc/hosts 
-    ######################################
-    my $fname = "/etc/hosts";
-    if ( $verbose ) {
-        trace( $request, "updating /etc/hosts...." );
-    }
-    unless ( open( HOSTS,"<$fname" )) {
-        if ( $verbose ) {
-            trace( $request, "Error opening '$fname'" );
-        }
-        return( $mm );
-    } 
-    my @rawdata = <HOSTS>;
-    close( HOSTS );
-
-    ######################################
-    # Remove old entry 
-    ######################################
-    foreach ( keys %$mm) {
-        my ($ip,$host) = split /,/,$mm->{$_}->{args};
-        foreach ( @rawdata ) {
-            if ( /^#/ or /^\s*\n$/ ) {
-                next;
-            } elsif ( /\s+$host\s+$/ ) {
-                s/$_//;
-            }
-        }
-        push @rawdata,"$ip\t$host\n";
-    }
-    ######################################
-    # Rewrite file 
-    ######################################
-    unless ( open( HOSTS,">$fname" )) {
-        if ( $verbose ) {
-            trace( $request, "Error opening '$fname'" );
-        }
-        return( $mm );
-    }
-    print HOSTS @rawdata;
-    close( HOSTS );
-    return( $mm );
-}
-
-
-##########################################################################
 # Process request from xCat daemon
 ##########################################################################
 sub process_request {
@@ -1766,11 +1358,24 @@ sub process_request {
     my %request;
     $request{arg}      = $req->{arg};
     $request{callback} = $callback;
-   
+    $request{command}  = $req->{command}->[0];
+
+    ####################################
+    # Process command-specific options
+    ####################################
+    my $result = parse_args( \%request );
+    
+    ####################################
+    # Return error
+    ####################################
+    if ( ref($result) eq 'ARRAY' ) {
+        send_msg( \%request, 1, @$result );
+        return(1);
+    }   
     ###########################################
     # Broadcast SLP
     ###########################################
-    my $result = slp_query( \%request );
+    $result = slp_query( \%request );
 
     my $Rc = shift(@$result);
     return( $Rc );
@@ -1778,6 +1383,7 @@ sub process_request {
 
 
 1;
+
 
 
 
