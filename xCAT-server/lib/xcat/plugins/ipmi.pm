@@ -537,7 +537,7 @@ sub ipmicmd {
 		}
 		elsif($subcommand eq "reset") {
 			($rc,$text) = power("reset");
-			$noclose = 1;
+			$noclose = 0;
 		}
 		elsif($subcommand eq "cycle") {
 			my $text2;
@@ -567,7 +567,7 @@ sub ipmicmd {
 			if($rc == 0) {
 				if($text eq "on") {
 					($rc,$text2) = power("reset");
-					$noclose = 1;
+					$noclose = 0;
 				}
 				elsif($text eq "off") {
 					($rc,$text2) = power("on");
@@ -4163,17 +4163,19 @@ sub activatesession {
 			$error = "Requested maximum privilege level exceeds user and/of channel privilege limit";
 		}
 
-		$auth = $response[37];
-		if($auth == 0x00) {
-			$authoffset=16;
-		}
-		elsif($auth == 0x02) {
-		}
-		elsif($auth == 0x04) {
-		}
-		else {
-			$error = "activate session requested unsupported Authentication Type Support";
-		}
+        unless ($error) {
+    		$auth = $response[37];
+    		if($auth == 0x00) {
+    			$authoffset=16;
+    		}
+    		elsif($auth == 0x02) {
+    		}
+    		elsif($auth == 0x04) {
+    		}
+    		else {
+    			$error = "activate session requested unsupported Authentication Type Support";
+    		}
+        }
 
 ###check
 		@session_id = @response[38,39,40,41];
