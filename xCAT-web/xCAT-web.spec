@@ -1,12 +1,12 @@
 Summary: Web Interface for xCAT
 Name: xCAT-web
-Version: 2.0.1
+Version: 2.0.2
 Release: %(date +"%Y%m%d")
 Epoch: 3
 
 License: EPL
 Group: Applications/System
-Source: xCAT-web-2.0.1.tar.gz
+Source: xCAT-web-2.0.2.tar.gz
 Packager: IBM Corp.
 Vendor: IBM Corp.
 URL: http://xcat.org
