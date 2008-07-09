@@ -18,7 +18,7 @@ fi
 #rm -rf $SRCDIR
 mkdir -p $DESTDIR
 mkdir -p $SRCDIR
-#cd xcat-core
+cd xcat-core
 svn up > ../coresvnup
 if $GREP xCAT-client ../coresvnup; then
    UPLOAD=1
