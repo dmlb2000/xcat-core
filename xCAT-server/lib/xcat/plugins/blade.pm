@@ -169,6 +169,8 @@ my %mpahash;
 my $mpa;
 my $allinchassis=0;
 my $curn;
+my @cfgtext;
+
 
 sub fillresps {
   my $response = shift;
@@ -417,12 +419,6 @@ sub enabledefaultalerts {
    }
 }
    
-
-
-
-
-
-my @cfgtext;
 sub mpaconfig {
    #OIDs of interest:
    #1.3.6.1.4.1.2.3.51.2.4.9.3.1.4.1.1.4 snmpCommunityEntryCommunityIpAddress2
@@ -444,11 +440,7 @@ sub mpaconfig {
    if ($didchassis) { return 0, @cfgtext } #"Chassis already configured for this command" }
    @cfgtext=();
 
-   my $result = telnetcmds($mpa,$user,$pass,$nodeid,@_);
-   $returncode |= @$result[0];
-   my $args = @$result[1];
-
-   foreach $parameter (@$args) {
+   foreach $parameter (@_) {
       $assignment = 0;
       $value = undef;
       if ($parameter =~ /=/) {
@@ -496,16 +488,6 @@ sub mpaconfig {
             push @cfgtext,"SNMP: disabled";
          }
          next;
-      }
-      if ($parameter =~ /^sshcfg$/i) {
-         my $data = $session->get(['1.3.6.1.4.1.2.3.51.2.4.9.3.4.10',0]);
-         if ($data =~ /NOSUCHOBJECT/) {
-            push @cfgtext,"SSH: Not supported";
-         } elsif ($data) {
-            push @cfgtext,"SSH: enabled";
-         } else {
-            push @cfgtext,"SSH: disabled";
-         }
       }
       if ($parameter eq "snmpdest") {
          $parameter = "snmpdest1";
@@ -1663,7 +1645,7 @@ sub telnetcmds {
   # most of these commands should be able to be done
   # through SNMP, but they produce various errors.
   foreach my $cmd (@_) {
-    if ($cmd =~ /^swnet|pd1|pd2|=/) {
+    if ($cmd =~ /^swnet|pd1|pd2|sshcfg|=/) {
       if (($cmd =~ /^textid/) and ($nodeid > 0)) {
         push @unhandled,$cmd;
         next;
@@ -1888,8 +1870,10 @@ sub sshcfg {
   my $uid = shift;
   my $fname = ((xCAT::Utils::isAIX()) ? "/.ssh/":"/root/.ssh/")."id_rsa.pub";
 
-  if ($value !~ /^enable|disable$/i) {
-    return([1,"Invalid argument '$value' (enable|disable)"]);
+  if ($value) {
+    if ($value !~ /^enable|disable$/i) {
+      return([1,"Invalid argument '$value' (enable|disable)"]);
+    }
   }
   # Does MM support SSH
   my @data = $t->cmd("sshcfg -hk rsa -T system:mm[1]");
@@ -1907,10 +1891,6 @@ sub sshcfg {
     return([1,"SSH supported on AMM with minimum firmware BPET32"]);
   }
 
-  if ($value =~ /^disable$/i) {
-    @data = $t->cmd("ports -sshe off -T system:mm[1]");
-    return([0,"OK"]);
-  }
   # Get SSH key on Management Node
   unless (open(RSAKEY,"<$fname")) {
     return([1,"Error opening '$fname'"]);
@@ -1935,6 +1915,26 @@ sub sshcfg {
   # Determine is key already exists on MM
   @data = $t->cmd("users -$id -pk all -T system:mm[1]");
 
+  # Query if enabled/disabled
+  if (!$value) {
+    my @ddata = $t->cmd("sshcfg -T system:mm[1]");
+
+    if (my ($d) = grep(/^-cstatus\s+(\S+)$/,@ddata)) {
+      if ($d=~ /\s(\S+)$/) {
+        if ($1=~ /^disabled/i) {
+          return([0,"SSH: disabled"]);
+        }
+      }
+    }
+    # Find login
+    foreach (split(/Key\s+/,join('',@data))) {
+      if (/-cm\s+$login/) {
+        return([0,"SSH: enabled"]);
+      }
+    }
+    return([0,"SSH: disabled"]);
+  }
+
   # Remove existing keys for this login
   foreach (split(/Key\s+/,join('',@data))) {
     if (/-cm\s+$login/) {
@@ -1943,6 +1943,13 @@ sub sshcfg {
       @data = $t->cmd("users -$id -pk -$key -remove -T system:mm[1]");
     }
   }
+  if ($value =~ /^disable$/i) {
+    if (!grep(/^OK$/i, @data)) {
+      return([1,"SSH Key not found on MM"]);
+    }
+    return([0,"SSH: disabled"]);
+  }
+
   # Make sure SSH key is generated on MM
   @data = $t->cmd("sshcfg -hk rsa -T system:mm[1]");
 
@@ -1967,9 +1974,13 @@ sub sshcfg {
   }
   # Transfer SSH key from Management Node to MM
   $sshkey =~ s/@/\@/;
+  $t->cmd("users -$id -at set -T system:mm[1]");
   @data = $t->cmd("users -$id -pk -T system:mm[1] -add $sshkey");
 
   if ($data[0]=~/Error/i) {
+    if ($data[0]=~/Error writing data for option -add/i) {
+      return([1,"Maximum number of SSH keys reached for this chassis"]);
+    }
     return([1,$data[0]]);
   }
   # Enable ssh on MM
@@ -2073,6 +2084,51 @@ sub dompa {
   my %namedargs=@_;
   my @exargs=@{$namedargs{-args}};
   my $node;
+  my $args = \@exargs;
+
+  # Handle telnet commands before SNMP
+  if ($command eq "rspconfig") {
+    foreach $node (sort (keys %{$mpahash->{$mpa}->{nodes}})) {
+      @cfgtext=();
+      my $slot = $mpahash->{$mpa}->{nodes}->{$node};
+      my $user = $mpahash->{$mpa}->{username};
+      my $pass = $mpahash->{$mpa}->{password};
+
+      my $result = telnetcmds($mpa,$user,$pass,$slot,@exargs);
+      my $rc |= @$result[0];
+      $args = @$result[1];
+
+      foreach(@cfgtext) {
+        my %output;
+        (my $desc,my $text) = split (/:/,$_,2);
+
+        unless ($text) {
+          $text=$desc;
+        } else {
+          $desc =~ s/^\s+//;
+          $desc =~ s/\s+$//;
+          if ($desc) {
+            $output{node}->[0]->{data}->[0]->{desc}->[0]=$desc;
+          }
+        }
+        $text =~ s/^\s+//;
+        $text =~ s/\s+$//;
+        $output{node}->[0]->{errorcode} = $rc;
+        $output{node}->[0]->{name}->[0]=$node;
+        $output{node}->[0]->{data}->[0]->{contents}->[0]=$text;
+
+        print $out freeze([\%output]);
+        print $out "\nENDOFFREEZE6sK4ci\n";
+        yield;
+        waitforack($out);
+      }
+    }
+  }
+  # Only telnet commands
+  unless ( @$args ) {
+    return;
+  }
+
   $session = new SNMP::Session(
                     DestHost => $mpa,
                     Version => '3',
@@ -2107,7 +2163,7 @@ sub dompa {
   }
   foreach $node (sort (keys %{$mpahash->{$mpa}->{nodes}})) {
     $curn = $node;
-    my ($rc,@output) = bladecmd($mpa,$node,$mpahash->{$mpa}->{nodes}->{$node},$mpahash->{$mpa}->{username},$mpahash->{$mpa}->{password},$command,@exargs); 
+    my ($rc,@output) = bladecmd($mpa,$node,$mpahash->{$mpa}->{nodes}->{$node},$mpahash->{$mpa}->{username},$mpahash->{$mpa}->{password},$command,@$args); 
 
     my @output_hashes;
     foreach(@output) {
@@ -2146,6 +2202,7 @@ sub dompa {
 }
     
 1;
+
 
 
 
