@@ -4,6 +4,7 @@ use Storable qw(dclone);
 use xCAT::Table;
 use Data::Dumper;
 use Getopt::Long;
+use Cwd;
 Getopt::Long::Configure("bundling");
 Getopt::Long::Configure("pass_through");
 
@@ -33,6 +34,7 @@ sub process_request {
   my $arch = undef;
   $identified=0;
   $::CDMOUNTPATH="/mnt/xcat";
+  my $existdir = getcwd;
 
   @ARGV = @{$request->{arg}};
   GetOptions(
@@ -72,6 +74,8 @@ sub process_request {
     $doreq->($newreq,\&take_answer);
     $::CDMOUNTPATH="";
 
+    chdir($existdir);
+    while (wait() > 0) { yield; } #Make sure all children exit before trying umount
     system("umount /mnt/xcat");
     unless ($identified) {
        $callback->({error=>["copycds could not identify the ISO supplied, you may wish to try -n <osver>"],errorcode=>[1]});
