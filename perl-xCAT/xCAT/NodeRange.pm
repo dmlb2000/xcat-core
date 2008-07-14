@@ -11,6 +11,7 @@ our @EXPORT = qw(noderange nodesmissed);
 
 my $missingnodes=[];
 my $nodelist; #=xCAT::Table->new('nodelist',-create =>1);
+my $recurselevel=0;
 #my $nodeprefix = "node";
 
 
@@ -38,6 +39,7 @@ sub expandatom {
 	}
     if ($atom =~ /^\(.*\)$/) {     # handle parentheses by recursively calling noderange()
       $atom =~ s/^\((.*)\)$/$1/;
+      $recurselevel++;
       return noderange($atom);
     }
 
@@ -206,7 +208,9 @@ sub noderange {
   #answer not work
   my $range=shift;
   my $verify = (scalar(@_) == 1 ? shift : 1);
-  $nodelist =xCAT::Table->new('nodelist',-create =>1);
+  unless ($nodelist) { #Do not recreate the table connection on recursion
+      $nodelist =xCAT::Table->new('nodelist',-create =>1);
+  }
   my %nodes = ();
   my %delnodes = ();
   my $op = ",";
@@ -227,6 +231,7 @@ sub noderange {
           $line =~ m/^([^:	 ]*)/;
           my $newrange = $1;
           chomp($newrange);
+          $recurselevel++;
           my @filenodes = noderange($newrange);
           foreach (@filenodes) {
             $nodes{$_}=1;
@@ -264,7 +269,11 @@ sub noderange {
 			delete $nodes{$_};
 		}
     }
-    undef $nodelist;
+    if ($recurselevel) {
+        $recurselevel--;
+    } else {
+        undef $nodelist;
+    }
     return sort (keys %nodes);
 
 }
