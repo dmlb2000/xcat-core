@@ -42,7 +42,7 @@ my %usage = (
     PPC specific:
        rinv <noderange> [bus|config|serial|model|all]",
     "rsetboot" => 
-"Usage: rsetboot <noderange> [net|hd|cd|def|stat] [-V|--verbose]
+"Usage: rsetboot <noderange> [net|hd|cd|floppy|def|stat] [-V|--verbose]
        rsetboot [-h|--help|-v|--version]",
     "rbootseq" => 
 "Usage: rbootseq <noderange> [hd0|hd1|hd2|hd3|net|iscsi|usbflash|floppy|none],...
