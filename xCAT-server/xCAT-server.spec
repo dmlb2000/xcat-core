@@ -1,11 +1,11 @@
 Summary: Server and configuration utilities of the xCAT management project
 Name: xCAT-server
-Version: 2.0.2
+Version: 2.0.3
 Release: %(date +"%Y%m%d")
 Epoch: 3
 License: EPL
 Group: Applications/System
-Source: xCAT-server-2.0.2.tar.gz
+Source: xCAT-server-2.0.3.tar.gz
 Packager: IBM Corp.
 Vendor: IBM Corp.
 Distribution: %{?_distribution:%{_distribution}}%{!?_distribution:%{_vendor}}

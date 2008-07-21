@@ -1,5 +1,5 @@
 %define epoch   0
-%define version	2.0.2
+%define version	2.0.3
 %ifarch i386 i586 i686 x86
 %define tarch x86
 %endif

@@ -1,11 +1,11 @@
 Summary: RMC monitoring plug-in for xCAT
 Name: xCAT-rmc
-Version: 2.0.2
+Version: 2.0.3
 Release: %(date +"%Y%m%d")
 Epoch: 3
 License: EPL
 Group: System Environment/Libraries
-Source: xCAT-rmc-2.0.2.tar.gz
+Source: xCAT-rmc-2.0.3.tar.gz
 Packager: IBM Corp.
 Vendor: IBM Corp.
 Distribution: %{?_distribution:%{_distribution}}%{!?_distribution:%{_vendor}}
