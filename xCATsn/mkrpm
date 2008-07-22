@@ -32,6 +32,10 @@ else
 	tar --exclude .svn -czf /usr/src/$pkg/SOURCES/license.tar.gz LICENSE.html
 	cp xcat.conf /usr/src/$pkg/SOURCES
 	rm -f /usr/src/$pkg/SRPMS/xCATsn-2.0*rpm /usr/src/$pkg/RPMS/*/xCATsn-2.0*rpm
-	rpmbuild -ba xCATsn.spec
+   if [ ! -z "$1" ]; then
+	rpmbuild -ba xCAT.spec --target $1
+   else
+	rpmbuild -ba xCAT.spec
+   fi
 	cd -
 fi
