@@ -1,6 +1,7 @@
 # IBM(c) 2007 EPL license http://www.eclipse.org/legal/epl-v10.html
 package xCAT_plugin::copycds;
 use Storable qw(dclone);
+use Thread qw(yield);
 use xCAT::Table;
 use Data::Dumper;
 use Getopt::Long;
@@ -75,7 +76,7 @@ sub process_request {
     $::CDMOUNTPATH="";
 
     chdir($existdir);
-    while (wait() > 0) { yield; } #Make sure all children exit before trying umount
+    while (wait() > 0) { yield(); } #Make sure all children exit before trying umount
     system("umount /mnt/xcat");
     unless ($identified) {
        $callback->({error=>["copycds could not identify the ISO supplied, you may wish to try -n <osver>"],errorcode=>[1]});
