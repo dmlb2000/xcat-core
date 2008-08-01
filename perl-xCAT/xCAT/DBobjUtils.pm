@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/bin/env perl -w
 # IBM(c) 2007 EPL license http://www.eclipse.org/legal/epl-v10.html
 
 #####################################################
@@ -15,6 +15,7 @@ use xCAT::Schema;
 use xCAT::Table;
 use xCAT::Utils;
 use xCAT::MsgUtils;
+use strict;
 
 #  IPv6 not yet implemented - need Socket6
 use Socket;
@@ -70,7 +71,7 @@ sub getObjectsOfType
 
         my $table;
         my $tabkey;
-        foreach $this_attr (@{$datatype->{'attrs'}})
+        foreach my $this_attr (@{$datatype->{'attrs'}})
         {
             my $attr = $this_attr->{attr_name};
             if ($attr eq $objkey)
@@ -151,7 +152,7 @@ sub getobjdefs
     my ($class, $hash_ref) = @_;
     my %objhash;
 
-    %typehash = %$hash_ref;
+    my %typehash = %$hash_ref;
 
 	@::foundTableList = ();
 	
@@ -211,7 +212,7 @@ sub getobjdefs
 		{
 
         # get data from DB
-        $type = $typehash{$objname};
+        my $type = $typehash{$objname};
 
         # add the type to the hash for each object
         $objhash{$objname}{'objtype'} = $type;
@@ -224,13 +225,14 @@ sub getobjdefs
 
         #  get a list of valid attr names
         #       for this type object
+		my %attrlist;
         foreach my $entry (@{$datatype->{'attrs'}})
         {
             push(@{$attrlist{$type}}, $entry->{'attr_name'});
         }
 
         # go through the list of valid attrs
-        foreach $this_attr (@{$datatype->{'attrs'}})
+        foreach my $this_attr (@{$datatype->{'attrs'}})
         {
             my $ent;
 
@@ -266,19 +268,19 @@ sub getobjdefs
             my ($tab, $tabattr) = split('\.', $this_attr->{tabentry});
 
             # ex. 'nodelist.node', 'attr:node'
-            ($lookup_key, $lookup_value) = split('\=', $this_attr->{access_tabentry});
+            my ($lookup_key, $lookup_value) = split('\=', $this_attr->{access_tabentry});
 
             # ex. 'nodelist', 'node'
-            ($lookup_table, $lookup_attr) = split('\.', $lookup_key);
+            my ($lookup_table, $lookup_attr) = split('\.', $lookup_key);
 
             # ex. 'attr', 'node'
-            ($lookup_type, $lookup_data) = split('\:', $lookup_value);
+            my ($lookup_type, $lookup_data) = split('\:', $lookup_value);
 
             #
             # Get the attr values from the DB tables
             #
 
-            if ($lookup_attr eq 'node')
+			if ($type eq 'node')
             {
                 my $thistable;
                 my $needtocommit = 0;
@@ -299,7 +301,7 @@ sub getobjdefs
                                            );
                     if (!$thistable)
                     {
-                        my %rsp;
+                        my $rsp;
                         $rsp->{data}->[0] =
                               "Could not get the \'$thistable\' table.";
                         xCAT::MsgUtils->message("E", $rsp, $::callback);
@@ -336,7 +338,7 @@ sub getobjdefs
                 }
                 else
                 {
-                    my %rsp;
+                    my $rsp;
                     $rsp->{data}->[0] =
                           "Could not read the \'$lookup_table\' table from the xCAT database.";
                     xCAT::MsgUtils->message("E", $rsp, $::callback);
@@ -345,6 +347,45 @@ sub getobjdefs
 
             }
         }
+
+		if ($typehash{$objname} eq 'monitoring') {
+		
+        	# need a special case for the monitoring table
+			# 	- need to check the monsetting table for entries that contain
+			#	 the same name as the monitoring table entry.
+
+        	my @TableRowArray = xCAT::DBobjUtils->getDBtable('monsetting');
+
+        	if (defined(@TableRowArray))
+            {
+                my $foundinfo = 0;
+                foreach (@TableRowArray)
+                {
+
+					if ($_->{name} eq $objname ) {
+
+                    	if ($_->{key})
+                    	{
+                        	$foundinfo++;
+                        	$objhash{$objname}{$_->{key}} = $_->{value};
+                    	}
+					}
+                }
+                if ($foundinfo)
+                {
+                    $objhash{$objname}{'objtype'} = 'monitoring';
+                }
+            }
+            else
+            {
+				 my $rsp;
+                 $rsp->{data}->[0] ="Could not read the \'$objname\' object from the \'monsetting\' table.\n";
+                 xCAT::MsgUtils->message("E", $rsp, $::callback);	
+            }
+            next;
+
+		}
+
         $::saveObjHash{$objname} = $objhash{$objname};
 
 		} # end if not cached
@@ -394,7 +435,7 @@ sub getDBtable
     	my $thistable = xCAT::Table->new($table, -create => 1, -autocommit => 0);
     	if (!$thistable)
     	{
-        	my %rsp;
+        	my $rsp;
         	$rsp->{data}->[0] = "Could not get the \'$table\' table.";
         	xCAT::MsgUtils->message("E", $rsp, $::callback);
         	return undef;
@@ -464,6 +505,131 @@ sub setobjdefs
         # get attr=val that are set in the DB ??
         my $type = $objhash{$objname}{objtype};
 
+		# handle the monitoring table as a special case !!!!!
+        if ($type eq 'monitoring')
+        {
+
+			my %DBattrvals;
+			# if plus or minus then need to know current settings
+			if ( ($::plus_option) || ($::minus_option) ) {
+            	my %DBhash;
+            	$DBhash{$objname} = $type;
+            	%DBattrvals = xCAT::DBobjUtils->getobjdefs(\%DBhash);
+			}
+
+			# Get the names of the attrs stored in monitoring table
+			# get the object type decription from Schema.pm
+        	my $datatype = $xCAT::Schema::defspec{$type};
+
+        	#  get a list of valid attr names
+        	#               for this type object
+        	my @attrlist;
+        	foreach my $entry (@{$datatype->{'attrs'}})
+        	{
+            	push(@attrlist, $entry->{'attr_name'});
+        	}
+
+			# open the tables (monitoring and monsetting)
+            my $montable = xCAT::Table->new('monitoring', -create => 1, -autocommit => 0);
+            if (!$montable)
+            {
+                my $rsp;
+                $rsp->{data}->[0] = "Could not set the \'$montable\' table.";
+                xCAT::MsgUtils->message("E", $rsp, $::callback);
+                return 1;
+            }
+			# open the table
+            my $monsettable = xCAT::Table->new('monsetting', -create => 1, -autocommit => 0);
+            if (!$monsettable)
+            {
+                my $rsp;
+                $rsp->{data}->[0] = "Could not set the \'$monsettable\' table.";
+                xCAT::MsgUtils->message("E", $rsp, $::callback);
+                return 1;
+            }
+
+			my %keyhash; 
+			my %updates;
+
+			foreach my $attr (keys %{$objhash{$objname}})
+            {
+				my $val;
+                if ($attr eq 'objtype')
+                {
+                    next;
+                }
+
+				# determine the value if we have plus or minus
+				if ($::plus_option)
+                {
+                    # add new to existing - at the end - comma separated
+                    if (defined($DBattrvals{$objname}{$attr}))
+                    {
+                        $val =
+                          "$DBattrvals{$objname}{$attr},$objhash{$objname}{$attr}";
+                    }
+                    else
+                    {
+                        $val = "$objhash{$objname}{$attr}";
+                    }
+                }
+                elsif ($::minus_option)
+				{
+                    # remove the specified list of values from the current
+                    #   attr values.
+                    if ($DBattrvals{$objname}{$attr})
+                    {
+                        # get the list of attrs to remove
+                        my @currentList = split(/,/, $DBattrvals{$objname}{$attr});
+                        my @minusList   = split(/,/, $objhash{$objname}{$attr});
+
+                        # make a new list without the one specified
+                        my $first = 1;
+                        my $newlist;
+                        foreach my $i (sort @currentList)
+                        {
+                            chomp $i;
+                            if (!grep(/^$i$/, @minusList))
+                            {
+                                # set new groups list for node
+                                if (!$first)
+                                {
+                                    $newlist .= ",";
+                                }
+                                $newlist .= $i;
+                                $first = 0;
+                            }
+                        }
+                        $val = $newlist;
+                    }
+                }
+                else
+                {
+                    #just set the attr to what was provided! - replace
+                    $val = $objhash{$objname}{$attr};
+                }
+
+				if (grep(/^$attr$/, @attrlist)) {
+					# if the attr belong in the monitoring tabel
+					%keyhash=(name=>$objname);
+					%updates=($attr=>$val);
+					$montable->setAttribs(\%keyhash, \%updates);
+
+				} else {
+					# else it belongs in the monsetting table
+					$keyhash{name} = $objname;
+					$keyhash{key} = $attr;
+                	$updates{value} = $val;
+					$monsettable->setAttribs(\%keyhash, \%updates);
+				}
+			}
+
+			$montable->commit;
+			$monsettable->commit;
+
+			next;
+		}
+
         # handle the site table as a special case !!!!!
         if ($type eq 'site')
         {
@@ -475,7 +641,7 @@ sub setobjdefs
             %DBattrvals = xCAT::DBobjUtils->getobjdefs(\%DBhash);
 
             # open the table
-            $thistable =
+            my $thistable =
               xCAT::Table->new('site', -create => 1, -autocommit => 0);
             if (!$thistable)
             {
@@ -492,6 +658,7 @@ sub setobjdefs
                     next;
                 }
 
+				my %keyhash;
                 $keyhash{key} = $attr;
 
                 my $val;
@@ -519,8 +686,8 @@ sub setobjdefs
                     {
 
                         # get the list of attrs to remove
-                        @currentList = split(/,/, $DBattrvals{$objname}{$attr});
-                        @minusList   = split(/,/, $objhash{$objname}{$attr});
+                        my @currentList = split(/,/, $DBattrvals{$objname}{$attr});
+                        my @minusList   = split(/,/, $objhash{$objname}{$attr});
 
                         # make a new list without the one specified
                         my $first = 1;
@@ -552,23 +719,30 @@ sub setobjdefs
 
                 }
 
-                $updates{value} = $val;
+				if ( $val eq "") { # delete the line
 
-                $thistable->setAttribs(\%keyhash, \%updates);
-                my ($rc, $str) = $thistable->setAttribs(\%keyhash, \%updates);
-                if (!defined($rc))
-                {
-                    if ($::verbose)
-                    {
-                        my %rsp;
-                        $rsp->{data}->[0] =
-                          "Could not set the \'$attr\' attribute of the \'$objname\' object in the xCAT database.\n";
-                        $rsp->{data}->[1] =
-                          "Error returned is \'$str->errstr\'.";
-                        xCAT::MsgUtils->message("I", $rsp, $::callback);
-                    }
-                    $ret = 1;
-                }
+					$thistable->delEntries(\%keyhash);
+
+				}  else { # change the attr
+
+					my %updates;
+                	$updates{value} = $val;
+
+                	my ($rc, $str) = $thistable->setAttribs(\%keyhash, \%updates);
+                	if (!defined($rc))
+                	{
+                    	if ($::verbose)
+                    	{
+                        	my $rsp;
+                        	$rsp->{data}->[0] =
+                          	"Could not set the \'$attr\' attribute of the \'$objname\' object in the xCAT database.\n";
+                        	$rsp->{data}->[1] =
+                          	"Error returned is \'$str->errstr\'.";
+                        	xCAT::MsgUtils->message("I", $rsp, $::callback);
+                    	}
+                    	$ret = 1;
+                	}
+				}
 
             }
 
@@ -614,7 +788,7 @@ sub setobjdefs
             {
                 if ($::verbose)
                 {
-                    my %rsp;
+                    my $rsp;
                     $rsp->{data}->[0] =
                       "\'$attr\' is not a valid attribute for type \'$type\'.";
                     $rsp->{data}->[1] = "Skipping to the next attribute.";
@@ -632,12 +806,14 @@ sub setobjdefs
 
 
 		my @setattrlist=();
+		my @checkedattrs;
 
-        foreach $this_attr (@{$datatype->{'attrs'}})
+        foreach my $this_attr (@{$datatype->{'attrs'}})
         {
 
             my %keyhash;
             my %updates;
+			my ($lookup_table, $lookup_attr);
             my $attr_name = $this_attr->{attr_name};
 
 
@@ -668,7 +844,30 @@ sub setobjdefs
 
                     # need to check the attrs we are setting for the object
                     #   as well as the attrs for this object that may be
-                   #   already set in DB
+                   	#   already set in DB
+
+					if ( !($objhash{$objname}{$check_attr})  && !($DBattrvals{$objname}{$check_attr}) ) {
+                        # if I didn't already check for this attr
+                        # if ($::VERBOSE) {
+                        my $rsp;
+                        if (!grep(/^$attr_name$/, @checkedattrs)) {
+                            push @{$rsp->{data}}, "Cannot set the \'$attr_name\' attribute unless a value is provided for \'$check_attr\'.\n";
+
+                            foreach my $tmp_attr (@{$datatype->{'attrs'}}) {
+                                my $attr = $tmp_attr->{attr_name};
+                                if ($attr eq $check_attr) {
+                                    my ($tab, $at) = split(/\./, $tmp_attr->{tabentry});
+                                    my $schema = xCAT::Table->getTableSchema($tab);
+                                    my $desc = $schema->{descriptions}->{$at};
+                                    push @{$rsp->{data}}, "$check_attr => $desc\n";
+                                }
+                            }
+                        }
+						xCAT::MsgUtils->message("I", $rsp, $::callback);
+                       # }
+						push(@checkedattrs, $attr_name);
+                        next;
+                    }
 
 					if ( !($objhash{$objname}{$check_attr} =~ /\b$check_value\b/) && !($DBattrvals{$objname}{$check_attr}  =~ /\b$check_value\b/) )
                     {
@@ -685,14 +884,14 @@ sub setobjdefs
 
                 # get the lookup info from defspec in Schema.pm
                 # ex. 'nodelist.node', 'attr:node'
-                ($lookup_key, $lookup_value) =
+                my ($lookup_key, $lookup_value) =
                   split('\=', $this_attr->{access_tabentry});
 
                 # ex. 'nodelist', 'node'
                 ($lookup_table, $lookup_attr) = split('\.', $lookup_key);
 
                 # ex. 'attr', 'node'
-                ($lookup_type, $lookup_data) = split('\:', $lookup_value);
+                my ($lookup_type, $lookup_data) = split('\:', $lookup_value);
 
             }
             else
@@ -740,9 +939,9 @@ sub setobjdefs
                 {
 
                     # get the list of attrs to remove
-                    @currentList =
+                    my @currentList =
                       split(/,/, $DBattrvals{$objname}{$attr_name});
-                    @minusList = split(/,/, $objhash{$objname}{$attr_name});
+                    my @minusList = split(/,/, $objhash{$objname}{$attr_name});
 
                     # make a new list without the one specified
                     my $first = 1;
@@ -796,7 +995,7 @@ sub setobjdefs
 
                 if (!$thistable)
                 {
-                    my %rsp;
+                    my $rsp;
                     $rsp->{data}->[0] =
                       "Could not set the \'$thistable\' table.";
                     xCAT::MsgUtils->message("E", $rsp, $::callback);
@@ -809,7 +1008,7 @@ sub setobjdefs
                 {
                     if ($::verbose)
                     {
-                        my %rsp;
+                        my $rsp;
                         $rsp->{data}->[0] =
                           "Could not set the \'$attr_name\' attribute of the \'$objname\' object in the xCAT database.\n";
                         $rsp->{data}->[1] = "Error returned is \'$str->errst
@@ -888,16 +1087,15 @@ sub rmobjdefs
 
     my %tablehash;
 
-    %objhash = %$hash_ref;
+    my %typehash = %$hash_ref;
 
     # get the attr=vals for these objects so we know how to
     #   find what tables have to be modified
-    %DBattrvals = xCAT::DBobjUtils->getobjdefs(\%objhash);
+    my %DBattrvals = xCAT::DBobjUtils->getobjdefs(\%typehash);
 
-    foreach my $objname (keys %objhash)
+	foreach my $objname (sort (keys %typehash))
     {
-
-        $type = $typehash{$objname};
+        my $type = $typehash{$objname};
 
         # special handling for site table
         if ($type eq 'site')
@@ -1027,7 +1225,7 @@ sub rmobjdefs
 sub readFileInput
 {
     my ($class, $filedata) = @_;
-    my $objectname;
+	my ($objectname, $junk1, $junk2);
 
     @::fileobjnames = ();
 
@@ -1043,8 +1241,9 @@ sub readFileInput
     #}
 
     my $look_for_colon = 1;    # start with first line that has a colon
+	my $objtype;
 
-    foreach $l (@lines)
+    foreach my $l (@lines)
     {
 
         # skip blank and comment lines
@@ -1056,11 +1255,10 @@ sub readFileInput
 
             $look_for_colon = 0;    # ok - we have a colon
 
-            ($objectname, $junk1, $junk2) = split(/:/, $l);
+            ($objectname, $junk2) = split(/:/, $l);
 
-            # check for second : or = sign
-            # if $junk2 is defined then there was a second :
-            if (defined($junk2) || grep(/=/, $junk))
+            # if $junk2 is defined or there's an = 
+            if (defined($junk2) || grep(/=/, $objectname))
             {
 
                 # error - invalid header $line in node definition file
@@ -1078,7 +1276,7 @@ sub readFileInput
             if ($objectname =~ /default/)
             {
 
-                ($junk, $objtype) = split(/-/, $objectname);
+                ($junk1, $objtype) = split(/-/, $objectname);
 
                 if ($objtype)
                 {
@@ -1093,8 +1291,8 @@ sub readFileInput
         }
         elsif (($l =~ /^\s*(\w+)\s*=\s*(.*)\s*/) && (!$look_for_colon))
         {
-            $attr = $1;
-            $val  = $2;
+            my $attr = $1;
+            my $val  = $2;
             $attr =~ s/^\s*//;    # Remove any leading whitespace
             $attr =~ s/\s*$//;    # Remove any trailing whitespace
             $val  =~ s/^\s*//;
@@ -1201,7 +1399,7 @@ sub getGroupMembers
             #	 node name to the member list
             #if ($_->{'groups'} =~ /$objectname/)
 
-            @nodeGroupList = split(',', $_->{'groups'});
+            my @nodeGroupList = split(',', $_->{'groups'});
             if (grep(/^$objectname$/, @nodeGroupList))
 
             {
@@ -1233,7 +1431,7 @@ sub getGroupMembers
             my ($a, $v) = $w =~ /^\s*(\S+?)\s*=\s*(\S*.*)$/;
             if (!defined($a) || !defined($v))
             {
-                my %rsp;
+                my $rsp;
                 $rsp->{data}->[0] =
                   "The \'-w\' option has an incorrect attr=val pair - \'$w\'.";
                 xCAT::MsgUtils->message("I", $rsp, $::callback);
@@ -1249,6 +1447,7 @@ sub getGroupMembers
         my @tmplist = xCAT::DBobjUtils->getObjectsOfType('node');
 
         # create a hash of obj names and types
+		my %tmphash;
         foreach my $n (@tmplist)
         {
             $tmphash{$n} = 'node';
@@ -1271,7 +1470,7 @@ sub getGroupMembers
 
                     # don't disply
                     $addlist = 0;
-                    break;
+                    next;
                 }
             }
             if ($addlist)
@@ -1318,6 +1517,7 @@ sub getNetwkInfo
 	my @nodelist    = @$ref_nodes;
 
 	my %nethash;
+	my @attrnames;
 
 	# get the current list of network attrs (networks table columns)
     my $datatype = $xCAT::Schema::defspec{'network'};

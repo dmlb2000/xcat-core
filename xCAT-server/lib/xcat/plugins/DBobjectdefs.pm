@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/bin/env perl -w
 # IBM(c) 2007 EPL license http://www.eclipse.org/legal/epl-v10.html
 #####################################################
 #
@@ -15,6 +15,7 @@ use xCAT::DBobjUtils;
 use Data::Dumper;
 use Getopt::Long;
 use xCAT::MsgUtils;
+use strict;
 
 # options can be bundled up like -vV
 Getopt::Long::Configure("bundling");
@@ -154,9 +155,9 @@ sub process_request
         ($ret, $msg) = &defrm;
     }
 
+	my $rsp;
     if ($msg)
     {
-        my $rsp;
         $rsp->{data}->[0] = $msg;
         $::callback->($rsp);
     }
@@ -194,7 +195,11 @@ sub processArgs
 {
     my $gotattrs = 0;
 
-    @ARGV = @{$::args};
+	if (defined(@{$::args})) {
+        @ARGV = @{$::args};
+    } else {
+        return 2;
+    }
 
     if (scalar(@ARGV) <= 0) {
         return 2;
@@ -315,7 +320,9 @@ sub processArgs
     if (defined($::opt_v))
     {
         my $rsp;
-        $rsp->{data}->[0] = "$::command - version 1.0";
+	#my $version=xCAT::Utils->Version();
+        #push @{$rsp->{data}}, "$::command - $version\n";
+	push @{$rsp->{data}}, "$::command - version 2.0";
         xCAT::MsgUtils->message("I", $rsp, $::callback);
         return 1;    # no usage - just exit
     }
@@ -448,13 +455,16 @@ sub processArgs
             $rsp->{data}->[1] = "Attribute          Description\n";
 
             my @alreadydone;    # the same attr may appear more then once
+			my @attrlist;
             my $outstr = "";
 
-            foreach $this_attr (@{$datatype->{'attrs'}})
+            foreach my $this_attr (@{$datatype->{'attrs'}})
             {
                 my $attr = $this_attr->{attr_name};
                 my $desc = $this_attr->{description};
-                if (!defined($desc)) {     # description key not there, so go to the corresponding entry in tabspec to get the description
+                if (!defined($desc)) {     
+					# description key not there, so go to the corresponding 
+					#	entry in tabspec to get the description
                 	my ($tab, $at) = split(/\./, $this_attr->{tabentry});
                 	my $schema = xCAT::Table->getTableSchema($tab);
                 	$desc = $schema->{descriptions}->{$at};
@@ -466,16 +476,24 @@ sub processArgs
 
                 if (!grep(/^$attr$/, @alreadydone))
                 {
-                #    $outstr .= "$attr\n\t\t- $desc \n\t\t(Table: $tab)\n\n";
-					#$outstr .= "$attr\n\t\t- $desc\n\n";
 					my $space = (length($attr)<7 ? "\t\t" : "\t");
-					$outstr .= "$attr:$space$desc\n\n";
+					push(@attrlist, "$attr:$space$desc\n\n");
                 }
                 push(@alreadydone, $attr);
             }
 
-			chop($outstr);  chop($outstr);
+			# print the output in alphabetical order
+            foreach my $a (sort @attrlist) {
+                $outstr .= "$a";
+            }
+            chop($outstr);  chop($outstr);
             $rsp->{data}->[2] = $outstr;
+
+			# the monitoring table is  special
+			if ($t eq 'monitoring') {
+				$rsp->{data}->[3] = "\nYou can also include additional monitoring plug-in specific settings. These settings will be used by the monitoring plug-in to customize the behavior such as event filter, sample interval, responses etc.\n";
+			}
+			
             xCAT::MsgUtils->message("I", $rsp, $::callback);
         }
 
@@ -732,6 +750,8 @@ sub defmk
     my $rc    = 0;
     my $error = 0;
 
+	my %objTypeLists;
+
     # process the command line
     $rc = &processArgs;
     if ($rc != 0)
@@ -820,7 +840,7 @@ sub defmk
             # set the attrs from the attr=val pairs
             foreach my $attr (keys %::ATTRS)
             {
-                if (!grep(/$attr/, @list) && ($::objtype ne 'site'))
+				if (!grep(/$attr/, @list) && ($::objtype ne 'site') && ($::objtype ne 'monitoring'))
                 {
                     my $rsp;
                     $rsp->{data}->[0] =
@@ -887,6 +907,7 @@ sub defmk
             {
 
                 # remove the old object
+				my %objhash;
                 $objhash{$obj} = $type;
                 if (xCAT::DBobjUtils->rmobjdefs(\%objhash) != 0)
                 {
@@ -994,6 +1015,7 @@ sub defmk
                           xCAT::DBobjUtils->getObjectsOfType('node');
 
                         # create a hash of obj names and types
+						my %objhash;
                         foreach my $n (@tmplist)
                         {
                             $objhash{$n} = 'node';
@@ -1011,13 +1033,12 @@ sub defmk
 
                             foreach my $testattr (keys %::WhereHash)
                             {
-				if ( !($myhash{$objname}{$testattr} =~ /\b$::WhereHash{$testattr}\b/) )
-
+								if ( !($myhash{$objname}{$testattr} =~ /\b$::WhereHash{$testattr}\b/) )
                                 {
 
                                     # don't disply
                                     $addlist = 0;
-                                    break;
+                                    next;
                                 }
                             }
 
@@ -1048,7 +1069,7 @@ sub defmk
 
                     #  add this group name to the node entry in
                     #		the nodelist table
-                    $nodehash{$n}{groups} = $obj;
+                    #$nodehash{$n}{groups} = $obj;
 
                     # get the current value
                     my $grps = $tab->getNodeAttribs($n, ['groups']);
@@ -1170,6 +1191,8 @@ sub defch
     my $error = 0;
 	my $firsttime = 1;
 
+	my %objTypeLists;
+
     # process the command line
     $rc = &processArgs;
     if ($rc != 0)
@@ -1261,7 +1284,7 @@ sub defch
             # set the attrs from the attr=val pairs
             foreach my $attr (keys %::ATTRS)
             {
-                if (!grep(/$attr/, @list) && ($::objtype ne 'site'))
+				if (!grep(/$attr/, @list) && ($::objtype ne 'site') && ($::objtype ne 'monitoring'))
                 {
                     my $rsp;
                     $rsp->{data}->[0] =
@@ -1328,7 +1351,7 @@ sub defch
         }
 
 
-        if (!isDefined && $::opt_m)
+        if (!$isDefined && $::opt_m)
         {
 
             #error - cannot remove items from an object that does not exist.
@@ -1351,6 +1374,7 @@ sub defch
 
             # what kind of group is this? - static or dynamic
             my $grptype;
+			my %objhash;
             if ($isDefined)
             {
                 $objhash{$obj} = $type;
@@ -1430,6 +1454,7 @@ sub defch
                     my @tmplist = xCAT::DBobjUtils->getObjectsOfType('node');
 
                     # create a hash of obj names and types
+					my %objhash;
                     foreach my $n (@tmplist)
                     {
                         $objhash{$n} = 'node';
@@ -1476,7 +1501,7 @@ sub defch
 
                                 # don't disply
                                 $addlist = 0;
-                                break;
+                                next;
                             }
                         }
 
@@ -1526,7 +1551,7 @@ sub defch
                     # for each node in memberlist add this group
                     # name to the groups attr of the node
                     my %membhash;
-                    foreach $n (@memberlist)
+                    foreach my $n (@memberlist)
                     {
 
                         $membhash{$n}{groups} = $obj;
@@ -1558,7 +1583,7 @@ sub defch
                         # for each node in memberlist - remove this group
                         #  from the groups attr
                         my %membhash;
-                        foreach $n (@memberlist)
+                        foreach my $n (@memberlist)
                         {
                             $membhash{$n}{groups}  = $obj;
                             $membhash{$n}{objtype} = 'node';
@@ -1578,7 +1603,7 @@ sub defch
                             # for each node in memberlist add this group
                             # name to the groups attr
                         my %membhash;
-                        foreach $n (@memberlist)
+                        foreach my $n (@memberlist)
                         {
                             $membhash{$n}{groups}  = $obj;
                             $membhash{$n}{objtype} = 'node';
@@ -1608,7 +1633,7 @@ sub defch
                         #	from groups attr
 
                         my %membhash;
-                        foreach $n (@currentlist)
+                        foreach my $n (@currentlist)
                         {
                             $membhash{$n}{groups}  = $obj;
                             $membhash{$n}{objtype} = 'node';
@@ -1630,7 +1655,7 @@ sub defch
                         # name to the groups attr
 
                         my %membhash;
-                        foreach $n (@memberlist)
+                        foreach my $n (@memberlist)
                         {
                             $membhash{$n}{groups}  = $obj;
                             $membhash{$n}{objtype} = 'node';
@@ -1666,7 +1691,7 @@ sub defch
 
             # get the list of all defined group objects
 
-            @definedgroups = xCAT::DBobjUtils->getObjectsOfType(group);
+            my @definedgroups = xCAT::DBobjUtils->getObjectsOfType("group");
 
             # if we're creating the node or we're adding to or replacing
             #	the "groups" attr then check if the group
@@ -1677,6 +1702,7 @@ sub defch
                 #  we either replace, add or take away from the "groups"
                 #		list
                 #  if not taking away then we must be adding or replacing
+				my %GroupHash;
                 foreach my $g (@grouplist)
                 {
                     if (!grep(/^$g$/, @definedgroups))
@@ -1828,8 +1854,7 @@ sub setFINALattrs
             {
 
                 # see if valid attr
-                if (!grep(/$attr/, @list)
-                    && ($::FILEATTRS{$objname}{objtype} ne 'site'))
+				if (!grep(/$attr/, @list) && ($::FILEATTRS{$objname}{objtype} ne 'site') && ($::FILEATTRS{$objname}{objtype} ne 'monitoring'))
                 {
 
                     my $rsp;
@@ -1846,6 +1871,11 @@ sub setFINALattrs
                 }
 
             }
+			# need to make sure the node attr is set otherwise nothing 
+			#	gets set in the nodelist table
+			if ($::FINALATTRS{$objname}{objtype} eq "node") {
+				$::FINALATTRS{$objname}{node} = $objname;
+			}
         }
     }
 
@@ -1871,6 +1901,11 @@ sub setFINALattrs
 
             }
 
+        }
+		# need to make sure the node attr is set otherwise nothing 
+		#   gets set in the nodelist table
+		if ($::FINALATTRS{$objname}{objtype} eq "node") {
+            $::FINALATTRS{$objname}{node} = $objname;
         }
     }
 
@@ -1917,6 +1952,7 @@ sub defls
 
     my @objectlist;
     @::allobjnames;
+	my @displayObjList;
 
     my $numtypes = 0;
 
@@ -2019,7 +2055,7 @@ sub defls
             # Get all object in this type list
             foreach my $t (@::clobjtypes)
             {
-                @tmplist = xCAT::DBobjUtils->getObjectsOfType($t);
+                my @tmplist = xCAT::DBobjUtils->getObjectsOfType($t);
 
                 if (scalar(@tmplist) > 1)
                 {
@@ -2033,7 +2069,7 @@ sub defls
                 {
                     my $rsp;
                     $rsp->{data}->[0] =
-                      "Could not get objects of type \'$type\'.\n";
+                      "Could not get objects of type \'$t\'.\n";
                     xCAT::MsgUtils->message("I", $rsp, $::callback);
                 }
             }
@@ -2093,7 +2129,7 @@ sub defls
 
                     # don't disply
                     $dodisplay = 0;
-                    break;
+                    next;
                 }
             }
             if ($dodisplay)
@@ -2184,7 +2220,7 @@ sub defls
             # special handling for site table - for now !!!!!!!
 			#
             my @attrlist;
-            if ($defhash{$obj}{'objtype'} eq 'site')
+            if (($defhash{$obj}{'objtype'} eq 'site') || ($defhash{$obj}{'objtype'} eq 'monitoring'))
             {
 
                 foreach my $a (keys %{$defhash{$obj}})
@@ -2202,7 +2238,7 @@ sub defls
                 my $datatype =
                   $xCAT::Schema::defspec{$defhash{$obj}{'objtype'}};
 				my @alreadydone;
-                foreach $this_attr (@{$datatype->{'attrs'}})
+                foreach my $this_attr (@{$datatype->{'attrs'}})
                 {
 					if (!grep(/^$this_attr->{attr_name}$/, @alreadydone)) {
                     	push(@attrlist, $this_attr->{attr_name});
@@ -2353,8 +2389,8 @@ sub defls
                             {
                                 if (grep (/^$showattr$/, @::AttrList))
                                 {
-                                    if (   ($obj eq 'group')
-                                        && ($showattr eq 'members'))
+
+									if ( ($defhash{$obj}{'objtype'} eq 'group') && ($showattr eq 'members'))
                                     {
 										$defhash{$obj}{'grouptype'} = "static";
                                         my $memberlist =
@@ -2389,8 +2425,7 @@ sub defls
                                 {
 									$defhash{$obj}{'grouptype'} = "static";
                                     my $memberlist =
-                                      xCAT::DBobjUtils->getGroupMembers($obj,
-                                                                     \%defhash);
+                                      xCAT::DBobjUtils->getGroupMembers($obj,\%defhash);
                                     my $rsp;
                                     $rsp->{data}->[0] =
                                       "    $showattr=$memberlist";
@@ -2401,7 +2436,7 @@ sub defls
                                 {
 
                                     # don't print unless set
-                                    if ($attrval ne " ")
+									if ( $attrval && ($attrval ne " "))	
                                     {
                                         my $rsp;
                                         $rsp->{data}->[0] =
@@ -2611,8 +2646,9 @@ sub defrm
         {
 
             # get the group object definition
+			my %ghash;
             $ghash{$obj} = 'group';
-            %grphash = xCAT::DBobjUtils->getobjdefs(\%ghash);
+            my %grphash = xCAT::DBobjUtils->getobjdefs(\%ghash);
             if (!defined(%grphash))
             {
                 my $rsp;
