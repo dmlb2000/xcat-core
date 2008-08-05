@@ -10,7 +10,7 @@ use Getopt::Long;
 
 =head1   mkrrnodes
 
-Make node definitions for RR nodes
+Make node definitions for RR nodes 
 
  mkrrnodes -C <cu letter> -L < start Rack number for CU> -R <startrange,endrange>     (add) 
  mkrrnodes -d -C <cu letter> -R <startrange,endrange> (delete)
@@ -79,7 +79,6 @@ foreach my $CU (@::CU)
 
             # calculate the rack number ( 12 triblades/rack)
             #  15 racks/CU
-            #  Rack number = (triblade# / 12) +1
             my $count = ($range -1) / 12;
             my ($rackno, $rem) = split '\.', $count;
            
