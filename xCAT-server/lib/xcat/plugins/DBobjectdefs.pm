@@ -2206,7 +2206,7 @@ sub defls
                     next;
                 }
 
-                if (!grep(/$obj/, @tmplist))
+                if (!grep(/^$obj$/, @tmplist))
                 {
                     my $rsp;
                     $rsp->{data}->[0] =
