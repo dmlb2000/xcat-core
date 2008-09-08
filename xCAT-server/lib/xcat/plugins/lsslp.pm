@@ -28,6 +28,7 @@ use constant {
     SERVICE_IVM      => "integrated-virtualization-manager",
     SERVICE_MM       => "management-module",
     SERVICE_RSA      => "remote-supervisor-adapter",
+    SERVICE_RSA2     => "remote-supervisor-adapter-2",
     TYPE_MM          => "MM",
     TYPE_RSA         => "RSA",
     TYPE_BPA         => "BPA",
@@ -45,12 +46,13 @@ use constant {
 # Globals
 #######################################
 my %service_slp = (
-    @{[ SERVICE_FSP ]} => TYPE_FSP,
-    @{[ SERVICE_BPA ]} => TYPE_BPA,
-    @{[ SERVICE_HMC ]} => TYPE_HMC,
-    @{[ SERVICE_IVM ]} => TYPE_IVM,
-    @{[ SERVICE_MM  ]} => TYPE_MM,
-    @{[ SERVICE_RSA ]} => TYPE_RSA 
+    @{[ SERVICE_FSP  ]} => TYPE_FSP,
+    @{[ SERVICE_BPA  ]} => TYPE_BPA,
+    @{[ SERVICE_HMC  ]} => TYPE_HMC,
+    @{[ SERVICE_IVM  ]} => TYPE_IVM,
+    @{[ SERVICE_MM   ]} => TYPE_MM,
+    @{[ SERVICE_RSA  ]} => TYPE_RSA,
+    @{[ SERVICE_RSA2 ]} => TYPE_RSA
 );
 
 #######################################
@@ -807,10 +809,19 @@ sub parse_responses {
     my $length  = shift;
 
     my %outhash = ();
-    my @attr    = (
+    my @attrs   = (
        "type",
        "machinetype-model",
        "serial-number",
+       "ip-address" );
+       
+    #######################################
+    # RSA/MM Attributes
+    #######################################
+    my @xattrs = (
+       "type",
+       "enclosure-machinetype-model",
+       "enclosure-serial-number",
        "ip-address" );
 
     foreach my $rsp ( @$values ) {
@@ -846,16 +857,22 @@ sub parse_responses {
         ###########################################
         # RSA/MM - slightly different attributes
         ###########################################
-        if (( $type eq SERVICE_RSA ) or ( $type eq SERVICE_MM )) {
-            $attr[1] = "enclosure-machinetype-model";
-            $attr[2] = "enclosure-serial-number";
+        my $attr = \@attrs;
+        
+        if (( $type eq SERVICE_RSA ) or ( $type eq SERVICE_RSA2 ) or
+            ( $type eq SERVICE_MM )) {
+            $attr = \@xattrs;
         }
-
         ###########################################
         # Extract the attributes
         ###########################################
-        foreach ( @attr ) {
-            $rsp =~ /\($_=([\w\-\.,]+)\)/; 
+        foreach ( @$attr ) {
+            unless ( $rsp =~ /\($_=([^\)]+)/ ) {
+                if ( $verbose ) {
+                    trace( $request, "Attribute not found: [$_]->($rsp)" );
+                }
+                next;
+            }
             push @result, $1;
         }
         ###########################################
