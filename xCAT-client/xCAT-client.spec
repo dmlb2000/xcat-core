@@ -148,6 +148,7 @@ ln -sf ../bin/xcatDBcmds $RPM_BUILD_ROOT/%{prefix}/bin/lsdef
 ln -sf ../bin/xcatDBcmds $RPM_BUILD_ROOT/%{prefix}/bin/rmdef
 ln -sf ../bin/xcatDBcmds $RPM_BUILD_ROOT/%{prefix}/bin/xcat2nim
 ln -sf ../bin/xdsh $RPM_BUILD_ROOT/%{prefix}/bin/xdcp
+ln -sf ../bin/xcatclientnnr $RPM_BUILD_ROOT/%{prefix}/sbin/mknb
 
 %clean
 # This step does not happen until *after* the %files packaging below
