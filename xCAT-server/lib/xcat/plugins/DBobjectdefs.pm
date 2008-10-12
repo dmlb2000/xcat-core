@@ -2436,7 +2436,7 @@ sub defls
                                 {
 
                                     # don't print unless set
-									if ( $attrval && ($attrval ne " "))	
+									if ( (defined $attrval) && ($attrval ne " "))	
                                     {
                                         my $rsp;
                                         $rsp->{data}->[0] =
