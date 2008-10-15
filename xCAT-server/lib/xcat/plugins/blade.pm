@@ -1086,7 +1086,7 @@ sub power {
         return (1,"$subcommand unsupported on the management module");
      }
   }
-  if ($subcommand eq "stat" or $subcommand eq "boot") {
+  if ($subcommand eq "stat" or $subcommand eq "state" or $subcommand eq "boot") {
     $validsub=1;
     $data = $session->get([$powerstatoid.".".$slot]);
     if ($data == 1) {
