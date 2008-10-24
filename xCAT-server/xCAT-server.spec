@@ -5,7 +5,7 @@ Release: %(date +"%Y%m%d")
 Epoch: 3
 License: EPL
 Group: Applications/System
-Source: xCAT-server-2.0.4.tar.gz
+Source: xCAT-server-2.0.5.tar.gz
 Packager: IBM Corp.
 Vendor: IBM Corp.
 Distribution: %{?_distribution:%{_distribution}}%{!?_distribution:%{_vendor}}
