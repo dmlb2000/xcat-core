@@ -959,7 +959,7 @@ sub power_cmd {
 
     my $op   = shift;  
     my $d    = shift;
-    my $type = @$d[4];
+    my $type = (@$d[4] eq "fsp") ? "sys" : @$d[4];
 
     ##############################
     # Build command 
@@ -979,6 +979,7 @@ sub power_cmd {
 
 
 1;
+
 
 
 
