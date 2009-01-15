@@ -1,6 +1,6 @@
 Summary: xCAT perl libraries
 Name: perl-xCAT
-Version: 2.0.3
+Version: 2.0.5
 Release: %(date +"%Y%m%d")
 Epoch: 3
 License: EPL
