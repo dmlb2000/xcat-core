@@ -1252,6 +1252,9 @@ sub getNodeAttribs_nosub_returnany
 
     Arguments:
            Table handle
+           "all" return all lines ( even disabled)
+           Default is to return only lines that have not been disabled
+
     Returns:
        Hash containing all rows in table
     Globals:
@@ -1261,7 +1264,8 @@ sub getNodeAttribs_nosub_returnany
     Example:
 
 	 my $tabh = xCAT::Table->new($table);
-	 my $recs=$tabh->getAllEntries();
+         my $recs=$tabh->getAllEntries(); # returns entries not disabled
+         my $recs=$tabh->getAllEntries("all"); # returns all  entries
 
     Comments:
         none
@@ -1272,8 +1276,18 @@ sub getNodeAttribs_nosub_returnany
 sub getAllEntries
 {
     my $self = shift;
+    my $allentries = shift;
     my @rets;
-    my $query = $self->{dbh}->prepare('SELECT * FROM ' . $self->{tabname});
+    my $query;
+
+    if ($allentries) { # get all lines
+     $query = $self->{dbh}->prepare('SELECT * FROM ' . $self->{tabname});
+    } else {  # get only enabled lines
+      $query = $self->{dbh}->prepare('SELECT * FROM '
+                . $self->{tabname}
+              . " WHERE \"disable\" is NULL or \"disable\" in ('','0','no','NO','no')");
+    }
+
     $query->execute();
     while (my $data = $query->fetchrow_hashref())
     {
