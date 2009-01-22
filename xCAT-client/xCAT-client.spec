@@ -5,7 +5,7 @@ Release: snap%(date +"%Y%m%d%H%M")
 Epoch: 4
 License: EPL
 Group: Applications/System
-Source: xCAT-client-2.1.1.tar.gz
+Source: xCAT-client-2.1.2.tar.gz
 Packager: IBM Corp.
 Vendor: IBM Corp.
 Distribution: %{?_distribution:%{_distribution}}%{!?_distribution:%{_vendor}}
