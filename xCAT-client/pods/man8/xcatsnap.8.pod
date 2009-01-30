@@ -1,0 +1,48 @@
+=head1 NAME
+
+B<xcatsnap> - Collects xCAT and related system configuraiton data.
+
+=head1 SYNOPSIS
+
+I<chtab [-h]>
+
+I<chtab [-v]>
+
+I<chtab [-d output_directory] >
+
+=head1 DESCRIPTION
+
+ The xcatsnap command collects various xCAT and system configuration data and compiles it into a tarball named xcatsnap.HOSTNAME.DATE.tar.
+
+
+=head1 OPTIONS
+
+
+B<-h>          Display usage message.
+
+B<-v>          Command Version.
+
+B<-d output_directory>	Specifies an output directory in which to create the tarball. The default is /tmp/xcatsnap.
+
+
+
+=head1 RETURN VALUE
+
+0 The command completed successfully.
+
+1 An error has occurred.
+
+=head1 EXAMPLES
+
+1. To create a tarball of xCAT configuration data in /tmp/xcatsnap:
+
+I<xcatsnap >
+
+2. To create an xCAT configuration data tarball in /var/tmp:
+
+I<xcatsnap -d /var/tmp >
+
+
+=head1 FILES
+
+/opt/xcat/share/xcat/tools/xcatsnap

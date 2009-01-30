@@ -1,0 +1,673 @@
+#!/bin/ksh
+# IBM(c) 2008 EPL license http://www.eclipse.org/legal/epl-v10.html
+#(C)IBM Corp
+#  
+###################################################################
+#
+# Description:
+#     The xcatsnap command gathers configuration, log and trace information
+#     about the xCAT components that are installed. This command only collects
+#     the data on the local node on which this command is run.
+#
+#     This command is typically executed when a problem is encountered with
+#     any of these components in order to provide service information to the
+#     IBM Support Center.
+#
+#     This command should only be executed at the instruction of the IBM
+#     Support Center.
+# Syntax:
+#       xcatsnap [-h] [-d output_directory]
+#
+# Flags:
+#       -h writes the usage of this command to standard output
+#       -d is used to specify the output directory (absolute path)
+#          default is /tmp/xcatsnap
+#
+# Ouputs:
+#     tar file : xcatsnap.host_name.nnnnnnnn.tar.Z
+#     log file : xcatsnap.host_name.nnnnnnnn.log
+#     (where host_name is the base name of the host name of the
+#     node on which the command is running; nnnnnnnn is a timestamp).
+#     By default these files are placed in the /tmp/xcatsnap directory.
+#
+# Exit Status:
+#     0 - run successfully
+#     1 - error occured
+#
+# Security:
+#     This command can only be run by a root user.
+#
+####################################################################
+
+export LANG=C
+
+ROOTDIR=/
+LOGDIR=/tmp/xcatsnap
+total_bytes=0
+
+#####################################################################
+# FUNCTIONs
+#####################################################################
+
+usage () {
+  echo "Usage: xcatsnap [-h] [-d output_directory]"
+  echo "    -h Display this usage statement."
+  echo "    -d Directory to put information (default:/tmp/xcatsnap)"
+} # End of usage
+
+valid_dir () {
+  case "$1" in
+        /*) ;;
+        *)  echo "Invalid argument for -d. Please specify an absolute path."
+            exit 1
+            ;;          # Not valid path.
+  esac
+} # End of valid_dir
+
+function check_and_tar_symbolic_dirs {
+  i=0
+  circular=0
+  fulldir=$file
+  pre_dir=$file
+
+  while [[ -L $fulldir ]]
+    do
+      if (( $i > $max_link_count )) # after max_link_count stop searching
+      then
+          echo "The symbolic link count exceeds max_link_count of $max_link_count." >> $LOGFILE
+          break 1
+      fi
+      #get the real directory name to tar
+      fulldir=$(ls -ld $fulldir |awk '{print $NF}')
+
+      # check if it is a relative dir and get the absolute path without ..
+      # so that it is easy for comparison for checking circular link
+      if (( $i > 0 ))
+      then
+          ((ii=$i-1))
+          pre_dir=${dir_array[$ii]}
+      fi
+      if [[ $fulldir = ..* ]]
+      then
+          abdir=${pre_dir%/*}
+          while [[ $fulldir = ..* ]]
+          do
+            fulldir=${fulldir#../}
+            abdir=${abdir%/*}
+          done
+          fulldir=$abdir/$fulldir
+      elif [[ $fulldir = .* ]]
+      then
+          fulldir=${fulldir#.}
+          abdir=${pre_dir%/*}
+          fulldir=$abdir$fulldir
+      elif [[ $fulldir != /* ]]
+      then
+          abdir=${pre_dir%/*}
+          fulldir=$abdir/$fulldir
+      fi
+      dir_array[$i]=$fulldir
+
+      # check circular link since now they are all absolute paths
+      j=0
+      while (( $j < $i ))
+        do
+          if [[ ${dir_array[$i]} = ${dir_array[$j]} ]]
+          then
+              echo "${dir_array[$i]} is a circular link." >> $LOGFILE
+              circular=1
+              break 2
+          fi
+          ((j=$j+1))
+      done
+      flist=".$fulldir $flist" # keep the original middle dirs structure
+                                   # so that we can trace the links
+      ((i=$i+1))
+  done
+  if [[ $circular != 1 ]]
+  then
+      if [[ -e ${TARFILE} ]]
+      then
+          tar -uf ${TARFILE} .$fulldir 2>/dev/null
+      else
+          tar -cf ${TARFILE} .$fulldir 2>/dev/null
+      fi
+  fi
+} # End of check_and_tar_symbolic_dirs
+
+function timeout_cmd {
+    typeset sleepTime=$1 # sleep for $1 secs
+    typeset timeOut=$2   # timeout in $2 secs
+    typeset waitTime=0   # increment value
+    typeset pid=""
+
+    # run the cmd
+    eval $cmd > .${OUTDIR}/$comp.out 2>&1 &
+    pid=$!
+
+    while [[ $waitTime -lt $timeOut ]]
+    do
+      waitTime=$(($waitTime + $sleepTime))
+
+      if ! kill -s 0 $pid 2>/dev/null
+      then
+        isTimeOut=0
+        break
+      fi
+      sleep $sleepTime
+    done
+    if [[ $waitTime -ge $timeOut ]]
+    then
+        kill $pid 2>/dev/null
+        isTimeOut=1
+        echo "Command $cmd timed out." >> $LOGFILE
+    fi
+
+} # end of timeout_cmd
+
+function run_cmd {
+  # replace any / characters with - in the comp name 
+  comp=`echo $comp | sed s@/@_@g`
+  exec 2>/dev/null
+  echo "    $cmd > $comp.out" >> $LOGFILE
+  echo "    $cmd > $comp.out"
+  echo "      Executing: $cmd" >> $LOGFILE
+  echo "      Executing: $cmd"
+  echo "$cmd" | egrep "df"  >/dev/null 2>/dev/null
+  if [ "$?" = 0 ]
+  then
+      timeout_cmd 5 30
+  else
+      eval $cmd >> .${OUTDIR}/$comp.out 2>&1
+  fi
+
+  echo "      Execution Complete: $cmd" >> $LOGFILE
+  echo "      Execution Complete: $cmd"
+
+  exec 2>/dev/null
+} # end of run_cmd
+
+function gather_files {
+  exec 2>/dev/null
+  indent=1
+  echo "    $files" >> $LOGFILE
+  echo "    $files"
+  echo "      Processing Files: $files" >> $LOGFILE
+  echo "      Processing Files: $files"
+  file_list=`ls $files`
+  for i in $file_list
+  do
+    file=$i
+    gather_file
+  done
+  echo "      Files Processed: $files" >> $LOGFILE
+  echo "      Files Processed: $files"
+  indent=0
+  exec 2>/dev/null
+} # end gather_files
+
+function gather_file {
+  exec 2>/dev/null
+  if [[ indent -eq 1 ]]
+  then
+    echo "        $file" >> $LOGFILE
+    echo "        $file"
+    echo "          Processing File: $file" >> $LOGFILE
+    echo "          Processing File: $file"
+  else
+    echo "    $file" >> $LOGFILE
+    echo "    $file"
+    echo "      Processing File: $file" >> $LOGFILE
+    echo "      Processing File: $file"
+  fi
+  if [[ -L $file ]]
+  then
+      check_and_tar_symbolic_dirs #handle symbolic link
+  fi
+  flist=".$file $flist"  # keep the original dir structure but
+                             # if it is a symbolic link then it's
+                             # only a symbolic link when tarred
+                             # so there is no duplication
+                             #  If it's not a symbolic link then
+                             # get the file list for archive
+
+  if [[ indent -eq 1 ]]
+  then
+    echo "          File Processed: $file" >> $LOGFILE
+    echo "          File Processed: $file"
+  else
+    echo "      File Processed: $file" >> $LOGFILE
+    echo "      File Processed: $file"
+  fi
+  exec 2>/dev/null
+} # end of gather_file
+
+##############################################################################
+# Function: doit
+#
+# To utilize this facility and add new function to collect more data from a
+# system you must use one of three methods :
+#
+# 1) single redirection in the form of " > "
+#     Notice the spaces surrounding the greater than sign
+# 2) append redirection in the form of "  >> "
+#     Notice the spaces surrounding the greater than signs
+# 3) The ls command in the form of "ls xxxx"
+#     Notice the xxxx can be either a file name or a directory name
+#     (but no wildcard)
+#
+#   All of these forms are very important for supporting conversion of commands
+#   to forms that will pipe their output to the "wc -c" command to count the
+#   number of bytes for the particular operation.
+#   If the commands are not in this form, you will get an error message.
+#   Again, this is important to understand when adding new functionality into
+#   the script for collecting more documentation
+#
+#   For the first (with ">") and the second (with ">>") methods you must use
+#   the following 3-line sequence to perform the appropriate space checking.
+#
+#   for example, for collecting "errpt -a" information :
+#           comp=errpt
+#           cmd="errpt -a > ./errpt.out 2>&1"
+#           run_cmd
+#
+#    comp    => This is the component name that will be used as the output
+#               file name. This output file will be save in log directory.
+#               There is no need to specify the component for the ls command.
+#    cmd     => This is the actual command you would like to run in one of the
+#               three appropriate formats as noted above.  Notice the " > " in
+#               this form of the command.
+#    run_cmd => This is just the function call to take appropriate action
+#               depending on which pass we are on.
+#
+#   For the third (ls) method, there is no need to specify the component name,
+#   only cmd and run_cmd lines are needed.
+#
+##############################################################################
+function doit {
+
+  #1. collect files
+
+  echo "  Collecting Files..."  | tee -a  $LOGFILE
+  echo | tee -a $LOGFILE
+
+  INSTALLDIR=`tabdump site | grep installdir | cut -f2 -d , | cut -f2 -d \"`
+
+  files="/etc/xcat/*"
+  gather_files
+
+  if [[ $opsys = Linux ]]
+  then
+  	files="/etc/*-release"
+  	gather_files
+
+  	file="/etc/nsswitch.conf"
+  	gather_file
+
+	file="/var/log/messages"
+  	gather_file
+  fi
+
+  if [[ $opsys = AIX ]]
+  then
+  	file="/etc/db_file.cr"
+  	gather_file
+
+  	file="/etc/dhcpsd.cnf"
+  	gather_file
+
+  	files="/tmp/spot.out.*"
+  	gather_files
+
+  	file="/var/adm/ras/nimlog"
+  	gather_file
+  fi
+
+  file="/etc/dhcpd.conf"
+  gather_file
+
+  file="/var/lib/dhcpd/dhcpd.leases"
+  gather_file
+
+  file="/etc/hosts"
+  gather_file
+
+  file="/etc/conserver.cf"
+  gather_file
+
+  files="$INSTALLDIR/autoinst/*"
+  gather_files
+
+  files="$INSTALLDIR/postscripts/*"
+  gather_files
+
+#YAMO: a listing of the image????
+
+  files="/tftpboot/*"
+  gather_files
+
+  files="/tftpboot/pxelinux.cfg/*"
+  gather_files
+
+  file="/var/log/conserver"
+  gather_file
+
+  files="/var/log/consoles/*"
+  gather_files
+
+  file="/etc/selinux/config"
+  gather_file
+
+  echo | tee -a $LOGFILE
+  echo "  File Collection Complete." | tee -a $LOGFILE
+  echo | tee -a $LOGFILE
+
+  #2. output of commands:
+
+  echo "  Capturing System Configuration Information..." | tee -a $LOGFILE
+  echo | tee -a $LOGFILE
+
+  comp=arp_-a
+  cmd="/usr/sbin/arp -a"
+  run_cmd
+
+  list=`ls /etc/xcat`
+  for i in $list 
+  do
+	if [[ -f $i ]]
+	then
+  		comp=$i
+		cmd="tabdump $i"
+  		run_cmd
+	fi
+  done
+
+  comp="nodels"
+  cmd="nodels"
+  run_cmd
+
+  list2=`nodels`
+  comp="lsdef"
+  for i in $list2
+  do
+	cmd="lsdef $i"
+  	run_cmd
+  done
+
+  list=`echo $list2 | sed  's/ /,/g'`
+
+  comp="rpower"
+  cmd="rpower $list query"
+  run_cmd 
+
+  comp=ps_-edlf
+  cmd="ps -edlf"
+  run_cmd
+
+  comp=ps_aux
+  cmd="ps aux"
+  run_cmd
+
+  comp=ulimit_-a
+  cmd="ulimit -a"
+  run_cmd
+
+  comp=df_-k
+  cmd="df -k"
+  run_cmd
+
+  comp="nodestat"
+  cmd="nodestat $list"
+  run_cmd 
+
+  comp="lsvm"
+  cmd="lsvm $list"
+  run_cmd 
+
+  comp="rinv"
+  cmd="rinv $list"
+  run_cmd 
+
+  comp="rvitals"
+  cmd="rvitals $list all"
+  run_cmd 
+
+  comp="nodels_groups"
+  cmd="nodels $list groups"
+  run_cmd 
+
+  comp="monls_all"
+  cmd="monls --all"
+  run_cmd 
+
+  if [[ $opsys = AIX ]]
+  then
+  	cmd="errpt_a"
+  	comp=errpt_-a
+  	cmd="/bin/errpt -a"
+  	run_cmd
+
+	comp=instfix_-i
+  	cmd="/usr/sbin/instfix -i"
+  	run_cmd
+
+	comp=lsnim_-l
+  	cmd="/usr/sbin/lsnim -l"
+  	run_cmd
+
+  	comp=lssrc_-l_-s_dhcpsd
+  	cmd="lssrc -l -s dhcpsd"
+  	run_cmd
+
+  	comp=netstat_-A
+  	cmd="/bin/netstat -A"
+  	run_cmd
+
+  	comp=lslpp_-hac
+  	cmd="/bin/lslpp -hac"
+  	run_cmd
+  fi
+
+  comp=env
+  cmd="env"
+  run_cmd
+
+  comp=ifconfig_-a
+  cmd="ifconfig -a"		# /sbin/ifconfig on linux /etc/ifconfig on AIX
+  run_cmd
+
+  comp=reventlog
+  cmd="reventlog -a all"
+  run_cmd
+
+  comp=lsmod
+  cmd="/sbin/lsmod"
+  run_cmd
+
+  comp=lspci
+  cmd="/sbin/lspci"
+  run_cmd
+
+  comp=lssrc_-a
+  cmd="lssrc -a"  # /bin on AIX /usr/bin on Linux
+  run_cmd
+
+  comp=netstat_-in
+  cmd="/bin/netstat -in"
+  run_cmd
+
+  comp=netstat_-rn
+  cmd="/bin/netstat -rn"
+  run_cmd
+
+  comp=rpm_-qa
+  cmd="/bin/rpm -qa"
+  run_cmd
+
+  comp=ls_$INSTALLDIR
+  cmd="ls -lR $INSTALLDIR"
+  run_cmd
+
+  comp=ls_tftpboot
+  cmd="ls -lR /tftpboot"
+  run_cmd
+
+  comp=ls_$XCATROOT
+  cmd="ls -lR $XCATROOT"
+  run_cmd
+
+  echo | tee -a $LOGFILE
+  echo "  System Configuration Information Captured." | tee -a $LOGFILE
+  echo | tee -a $LOGFILE
+
+} # End of doit
+
+#############################################
+# MAIN
+#############################################
+
+
+logdate=`date +\%m\%d\%H\%M`
+userid=`id -ru`
+if [ "$userid" != 0 ]
+then
+  echo "You must be a root user to use this utility. Exiting..."
+  exit 1
+fi
+export PATH=/opt/xcat/bin:/opt/xcat/sbin:/bin:/sbin:/usr/bin:/usr/sbin:
+opsys=`uname`
+
+
+while getopts "hd:v" flag
+do
+    case $flag in
+    h)
+	 usage
+         exit 0
+         ;;
+    d)   d_argument=$OPTARG
+         LOGDIR=$d_argument
+         valid_dir $LOGDIR
+		 dflag="d"
+         ;;
+    v)   echo "csmsnap version 1.0\n"
+	 exit 0
+	 ;;
+    :)   echo "You forgot to enter argument to $OPTARG"
+         usage
+         exit 1
+         ;;
+    \?)  usage
+         exit 1
+         ;;
+    esac
+done
+HOST=`hostname -s`
+TARFILE=${LOGDIR}/xcatsnap.${HOST}.${logdate}.tar
+LOGFILE=${LOGDIR}/xcatsnap.${HOST}.${logdate}.log
+
+mkdir -p ${LOGDIR}
+exec 3> $LOGFILE
+
+echo "xcatsnap Executing..." | tee -a $LOGFILE
+echo | tee -a $LOGFILE
+echo "  Preparing for data collection..." | tee -a $LOGFILE
+echo | tee -a $LOGFILE
+
+cd $ROOTDIR
+flist=""
+tmp_file_list="commands_output"
+out_file=""
+delete_list=""
+max_link_count=32
+
+OUTDIR=${LOGDIR}/commands_output
+if [[ -e $OUTDIR ]]
+then
+  rm -rf $OUTDIR
+fi
+mkdir -p ${OUTDIR}
+
+echo "    Time Stamp: `date`" | tee -a  $LOGFILE
+echo "    Log Directory: ${LOGDIR}" | tee -a $LOGFILE
+echo | tee -a $LOGFILE
+echo "  Preparation Complete." | tee -a $LOGFILE
+echo | tee -a $LOGFILE
+
+doit
+
+echo "  Compiling Information..." | tee -a  $LOGFILE
+
+flist="$flist"
+set $flist
+
+if [[ -e ${TARFILE} ]]
+then
+    tar -uf ${TARFILE}  -C $LOGDIR $tmp_file_list  -C $ROOTDIR "$@" 2>/dev/null
+else
+    tar -cf ${TARFILE}  -C $LOGDIR $tmp_file_list  -C $ROOTDIR "$@" 2>/dev/null
+fi
+
+if [[ -e ${TARFILE} ]]
+then
+    which gzip  > /dev/null 2>&1
+    if [[ "$?" = 0 ]]
+    then
+        gzip -f ${TARFILE}
+    else
+        which compress  > /dev/null 2>&1
+        if [[ "$?" = 0 ]]
+        then
+            compress -f ${TARFILE}
+        else
+            echo "    gzip and compress commands do not exist. The tar file ${TARFILE} will not be compressed." | tee -a  $LOGFILE
+        fi
+    fi
+fi
+
+GZFILE=${TARFILE}.gz
+ZFILE=${TARFILE}.Z
+out_file=".$OUTDIR $delete_list"
+set $out_file
+if [[ -e ${TARFILE} || -e ${GZFILE} || -e ${ZFILE} ]]
+then
+    rm -rf "$@"
+fi
+
+echo "  Information Compiled." | tee -a $LOGFILE
+echo | tee -a $LOGFILE
+echo "    Log Directory: ${LOGDIR}" | tee -a  $LOGFILE
+
+echo "xcatsnap Execution Complete." | tee -a $LOGFILE
+
+chmod 400 $LOGFILE
+if [[ -e ${GZFILE} ]]
+then
+    chmod 400 ${GZFILE}
+    echo "Send ${GZFILE} to IBM Support" | tee -a $LOGFILE
+elif [[ -e ${ZFILE} ]]
+then
+    chmod 400 $ZFILE
+    echo "Send $ZFILE to IBM Support" | tee -a $LOGFILE
+elif [[ -e ${TARFILE} ]]
+then
+    chmod 400 $TARFILE
+    echo "Send $TARFILE to IBM Support" | tee -a $LOGFILE
+else
+    chmod 400 $out_file
+    echo "Send $out_file to IBM Support" | tee -a $LOGFILE
+fi
+if [ "$Aflag" ]; 
+then
+  if  [ "$dflag" ];   # supply the directory
+     then
+      echo " Executing  /usr/bin/ctsnap -d $d_argument"
+      /usr/bin/ctsnap -d  "$d_argument"
+  else     # else use default
+       echo "Executing /usr/bin/ctsnap."
+	   /usr/bin/ctsnap 
+
+   
+  fi
+fi
+exit 0
