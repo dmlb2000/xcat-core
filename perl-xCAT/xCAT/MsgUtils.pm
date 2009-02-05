@@ -92,6 +92,7 @@ This program module file, supports the xcat messaging and logging
             Here's the meaning of the 1st character, if a callback specified:
 
                 D - DATA this is returned to the client callback routine
+                N - node DATA this is returned to the client callback routine
                 E - error this is displayed/logged by daemon/Client.pm.
                 I - informational this is displayed/logged by daemon/Client.pm.
                 S - Message will be logged to syslog ( severe error)
@@ -111,6 +112,7 @@ This program module file, supports the xcat messaging and logging
             Here's the meaning of the 1st character, if no callback specified:
 
                 D - DATA  goes to STDOUT
+                N - nodeDATA  goes to STDOUT
                 E - error.  This type of message will be sent to STDERR.
                 I - informational  goes to STDOUT
                 S - Message will be logged to syslog ( severe error)
@@ -190,8 +192,8 @@ sub message
     my $call_back = shift;    # optional
     my $exitcode  = shift;    # optional
 
-    # should be I, D, E, S, W
-    #  or S(I, D, E, S, W)
+    # should be I, D, E, S, W,N
+    #  or S(I, D, E, S, W,N)
 
     my $stdouterrf = \*STDOUT;
     my $stdouterrd = '';
@@ -221,6 +223,7 @@ sub message
     {    # callback routine provided
         my $sevkey;
         if    ($sev =~ /D/) { $sevkey = 'data'; }
+        elsif ($sev =~ /N/) { $sevkey = 'node'; }
         elsif ($sev =~ /I/) { $sevkey = 'info'; }
         elsif ($sev =~ /W/) { $sevkey = 'warning'; }
         elsif ($sev =~ /E/)
