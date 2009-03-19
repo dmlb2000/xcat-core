@@ -439,7 +439,7 @@ sub process_request
             {
                 next;
             }
-            if ($ent[1] =~ m/(ipoib|ib|vlan|bond|eth|myri|man|wlan)/)
+            if ($ent[1] =~ m/(remote|ipoib|ib|vlan|bond|eth|myri|man|wlan)/)
             {    #Mask out many types of interfaces, like xCAT 1.x
                 $activenics{$ent[1]} = 1;
             }
@@ -737,8 +737,13 @@ sub addnic
     {    #add a section if not there
         $restartdhcp=1;
         print "Adding NIC $nic\n";
-        push @dhcpconf, "shared-network $nic {\n";
-        push @dhcpconf, "\} # $nic nic_end\n";
+        if ($nic =~ /!remote!/) {
+            push @dhcpconf, "#shared-network $nic {\n";
+            push @dhcpconf, "#\} # $nic nic_end\n";
+        } else {
+            push @dhcpconf, "shared-network $nic {\n";
+            push @dhcpconf, "\} # $nic nic_end\n";
+        }
     }
 
     #return; #Don't touch it, it should already be fine..
