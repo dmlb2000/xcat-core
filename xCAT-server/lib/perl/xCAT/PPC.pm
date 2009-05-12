@@ -1274,8 +1274,9 @@ sub preprocess_for_rflash {
 
  	my $packages_fw = "/install/packages_fw";
 	my $c = 0;
-       	my $packages_d;
-	foreach (@$exargs) {
+    my $packages_d;
+	$callback->({data=>["It may take considerable time to complete, depending on the number of systems being updated and the workload on the target HMC.  In particular, power subsystem updates may take an hour or more if there are many attached managed systems. Please waiting."]});
+    foreach (@$exargs) {
 		$c++;
 		if($_ eq "-p") {
 			$packages_d = $$exargs[$c];
