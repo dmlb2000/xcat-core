@@ -38,7 +38,7 @@ chmod -R g+w *
 
 # Build the tarball
 VER=`cat $XCATCOREDIR/Version`
-DFNAME=xcat-dep-$VER-snap`date +%Y%m%d%H%M`.tar.bz2
+DFNAME=xcat-dep-$VER-`date +%Y%m%d%H%M`.tar.bz2
 cd ..
 tar jcvf $DFNAME xcat-dep
 cd xcat-dep
@@ -54,4 +54,5 @@ rsync -rlv * $UPLOADUSER,xcat@web.sourceforge.net:htdocs/yum/xcat-dep/
 
 # Upload the tarball to the SF uploads dir for the FRS
 scp ../$DFNAME $UPLOADUSER@web.sourceforge.net:uploads/
+echo "$DFNAME has been uploaded to the FRS uploads dir.  Remember to move it into the release."
 #scp ../$DFNAME $UPLOADUSER@frs.sourceforge.net:uploads/
