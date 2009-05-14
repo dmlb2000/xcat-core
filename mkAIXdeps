@@ -126,4 +126,7 @@ echo "README" >> $RPMDIR/flist2
 tar -cvf $RPMDIR/xcat-mysql-$VER-$SNAP.tar -L $RPMDIR/flist2
 gzip $RPMDIR/xcat-mysql-$VER-$SNAP.tar
 
+chgrp xcat *
+chmod g+w *
+
 exit 0;
