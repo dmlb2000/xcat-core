@@ -23,7 +23,7 @@ D=${CURDIR/\/src\/xcat-core/}
 REL=`basename $D`
 
 VER=`cat Version`
-if [ "$2" = "promote" ]; then
+if [ "$1" = "promote" ]; then
 	CORE="xcat-core"
 	TARNAME=xcat-core-$VER.tar.bz2
 else
@@ -33,7 +33,7 @@ fi
 DESTDIR=../../$CORE
 
 
-if [ "$2" != "promote" ]; then      # very long if statement to not do builds if we are promoting
+if [ "$1" != "promote" ]; then      # very long if statement to not do builds if we are promoting
 mkdir -p $DESTDIR
 SRCDIR=../../core-snap-srpms
 mkdir -p $SRCDIR
@@ -46,13 +46,13 @@ else
   pkg="packages"
 fi
 
-BUILDIT=0
 if [ -z "$SVNUP" ]; then
 	SVNUP=../coresvnup
 	svn up > $SVNUP
-    if ! grep 'At revision' $SVNUP; then
-        BUILDIT=1
-    fi
+fi
+BUILDIT=0
+if ! grep 'At revision' $SVNUP; then
+   BUILDIT=1
 fi
 
 if $GREP xCAT-client $SVNUP; then
@@ -63,7 +63,7 @@ if $GREP xCAT-client $SVNUP; then
    mv /usr/src/$pkg/RPMS/noarch/xCAT-client-$VER*rpm $DESTDIR/
    mv /usr/src/$pkg/SRPMS/xCAT-client-$VER*rpm $SRCDIR/
 fi
-if [ $BUILDIT eq 1 ]; then #$GREP perl-xCAT $SVNUP; then
+if [ $BUILDIT -eq 1 ]; then		# Use to be:  $GREP perl-xCAT $SVNUP; then
    UPLOAD=1
    ./makeperlxcatrpm
    rm -f $DESTDIR/perl-xCAT*rpm
@@ -164,7 +164,7 @@ fi		# end of very long if-not-promote
 
 # Modify the repo file to point to either xcat-core or core-snap
 cd $DESTDIR
-if [ "$2" = "promote" ]; then
+if [ "$1" = "promote" ]; then
 	sed -e 's|/core-snap|/xcat-core|' xCAT-core.repo > xCAT-core.repo.new
 	mv -f xCAT-core.repo.new xCAT-core.repo
 else
@@ -180,7 +180,7 @@ chmod g+w $TARNAME
 
 # Upload the tarball and individual RPMs to sourceforge
 rsync -rLv --delete $CORE $UPLOADUSER,xcat@web.sourceforge.net:htdocs/yum/$REL/
-if [ "$2" = "promote" -a "$1" != "devel" ]; then
+if [ "$1" = "promote" -a "$1" != "devel" ]; then
 	# upload tarball to FRS area
 	scp $TARNAME $UPLOADUSER@web.sourceforge.net:uploads/
 	echo "$TARNAME has been uploaded to the FRS uploads dir.  Remember to move it into the release."
