@@ -902,7 +902,7 @@ sub defmk
         }
     }
 
-    OBJ: foreach my $obj (keys %::FINALATTRS)
+	OBJ: foreach my $obj (keys %::FINALATTRS)
     {
 
         my $type = $::FINALATTRS{$obj}{objtype};
@@ -930,11 +930,12 @@ sub defmk
 			}
 			my %nethash = xCAT::DBobjUtils->getobjdefs(\%objhash);
 			foreach my $o (keys %nethash) {
-				if ( ($nethash{$o}{net} eq $::FINALATTRS{$o}{net})  && ($nethash{$o}{mask} eq $::FINALATTRS{$o}{mask}) ) {
+				if ( ($nethash{$o}{net} eq $::FINALATTRS{$obj}{net})  && ($nethash{$o}{mask} eq $::FINALATTRS{$obj}{mask}) ) {
 					my $rsp;
 					$rsp->{data}->[0] = "A network definition called \'$o\' already exists that contains the same net and mask values. Cannot create a definition for \'$obj\'.\n";
 					xCAT::MsgUtils->message("E", $rsp, $::callback);
 					$error = 1;
+					delete $::FINALATTRS{$obj};
 					next OBJ;
 				}	
 			}
