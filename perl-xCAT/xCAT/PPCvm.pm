@@ -263,7 +263,7 @@ sub mkvm_parse_args {
 # Read and check profile
 ####################################
     if ( exists( $opt{p})) {
-        $opt{p} = $request->{cwd}->[0] . $opt{p} if ( $opt{p} !~ /^\//);
+        $opt{p} = $request->{cwd}->[0] . '/' . $opt{p} if ( $opt{p} !~ /^\//);
         return ( usage( "Profile $opt{p} cannot be found")) if ( ! -f $opt{p});
         open (PROFFILE, "<$opt{p}") or return ( usage( "Cannot open profile $opt{p}"));
         my @cfgdata = ();
@@ -735,6 +735,26 @@ sub modify_by_attr {
                     push @values, [$lpar, @$cfg_res[0], $Rc];
                     next;
                 }
+                ##############################################
+                # If there is no curr_profile, which means no
+                # profile has been applied yet (before first 
+                # boot?), use the default_profile
+                ##############################################
+                if ( ! @$cfg_res[0])
+                {
+                    $cfg_res = xCAT::PPCcli::lssyscfg(
+                            $exp,
+                            "node",
+                            $cec,
+                            'default_profile',
+                            @$d[0]);
+                    $Rc = shift(@$cfg_res);
+                    if ( $Rc != SUCCESS ) {
+                        push @values, [$lpar, @$cfg_res[0], $Rc];
+                        next;
+                    }
+                }
+
 
                 my $prof = xCAT::PPCcli::lssyscfg(
                              $exp,
