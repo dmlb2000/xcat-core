@@ -910,7 +910,7 @@ sub lslic {
     ##########################################
     # Use timeout from site table (if defined) 
     ##########################################
-    if ( !defined( $timeout )) {
+    if ( !defined( $timeout ) || $timeout==0) {
         $timeout = @$exp[7] * 3;
     }
 
