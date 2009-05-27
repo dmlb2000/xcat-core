@@ -64,7 +64,7 @@ sub parse_args {
     	# Process command-line arguments
     	#############################################
     	if ( !defined( $args )) {
-        	return(usage( "No command specified" ));
+        	return(usage( "No arguments specified" ));
     	}
 
     	#############################################
@@ -86,7 +86,7 @@ sub parse_args {
 	if ( exists( $opt{v} )) {
         	return( \$::VERSION );
 	}
-		
+	
 	#################################
 	#Option --activate not valid with --commit or --recover
 	#################################
@@ -541,7 +541,7 @@ sub rflash {
         	xCAT::MsgUtils->message("E", $rsp, $::CALLBACK, 1);
 		push(@value,[$hmc,$rsp->{data}->[0]]);
 		push(@value,[$hmc,"Failed to copy $tmp_file $rpm_file_list $xml_file_list to $hmc"]);
-		push(@value,[$hmc,"Please check whether the HMC $hmc is configured to allow remote ssh connections"]);
+        #push(@value,[$hmc,"Please check whether the HMC $hmc is configured to allow remote ssh connections"]);
 		push (@value, [$hmc,"Failed to upgrade the firmware of $mtms_t  on $hmc"]);
 		return(\@value);
     	}
@@ -577,7 +577,7 @@ sub rflash {
         	xCAT::MsgUtils->message("S", $rsp, $::CALLBACK, 1);
 		dpush(\@value,[$hmc,"failed to run  xCAT::DSHCLI->runDsh_api()"]);
 		push(@value,[$hmc,$rsp->{data}->[0]]);
-		push(@value,[$hmc,"Please check whether the HMC $hmc is configured to allow remote ssh connections"]);
+        #push(@value,[$hmc,"Please check whether the HMC $hmc is configured to allow remote ssh connections"]);
 		#push (@value, [$hmc,"Failed to run the upgrade command \"rflash\" on $hmc"]);
 		push (@value, [$hmc,"Failed to upgrade the firmware of $mtms_t  on $hmc"]);
 		return(\@value);
