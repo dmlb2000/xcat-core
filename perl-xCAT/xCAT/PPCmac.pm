@@ -245,7 +245,38 @@ sub do_getmacs {
     #######################################
     if ( exists( $opt->{f} )) {
         $cmd.= " -i";
+    } else {
+        #################################
+        # Force LPAR shutdown if LPAR is
+        # running Linux
+        #################################
+        my $table = "nodetype";
+        my $intable = 0;
+        my @TableRowArray = xCAT::DBobjUtils->getDBtable($table);
+        if ( defined(@TableRowArray) ) {
+            foreach ( @TableRowArray ) {
+                my @nodelist = split(',', $_->{'node'});
+                my @oslist = split(',', $_->{'os'});
+                my $osname = "AIX";
+                if ( grep(/^$node$/, @nodelist) ) {
+                    if ( !grep(/^$osname$/, @oslist) ) {
+                        $cmd.= " -i";
+                    }
+                    $intable = 1;
+                    last;
+                }
+            }
+        }
+        #################################
+        # Force LPAR shutdown if LPAR OS
+        # type is not assigned in table
+        # but mnt node is running Linux
+        #################################
+        if ( xCAT::Utils->isLinux() && $intable == 0 ) {
+            $cmd.= " -i";
+        }
     }
+
     #######################################
     # Network specified (-D ping test)
     #######################################
@@ -344,10 +375,23 @@ sub getmacs {
     if ( !defined( $name )) {
         return( [[$node,"Node not found, lparid=$lparid",RC_ERROR]] );
     }
-    #########################################
-    # Manually collect MAC addresses.
-    #########################################
-    $result = do_getmacs( $request, $d, $exp, $name, $node );
+
+    my $sitetab  = xCAT::Table->new('site');
+    my $vcon = $sitetab->getAttribs({key => "conserveronhmc"}, 'value');
+    if ($vcon and $vcon->{"value"} and $vcon->{"value"} eq "yes" ) {
+        $result = xCAT::PPCcli::lpar_netboot(
+                            $exp,
+                            $request->{verbose},
+                            $name,
+                            $d,
+                            $opt );
+    } else {
+        #########################################
+        # Manually collect MAC addresses.
+        #########################################
+        $result = do_getmacs( $request, $d, $exp, $name, $node );
+    }
+    $sitetab->close;
     $Rc = shift(@$result);
    
     ##################################

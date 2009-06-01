@@ -132,6 +132,36 @@ sub do_rnetboot {
     #######################################
     if ( exists( $opt->{f} )) {
         $cmd.= " -i";
+    } else {
+        #################################
+        # Force LPAR shutdown if LPAR is
+        # running Linux
+        #################################
+        my $table = "nodetype";
+        my $intable = 0;
+        my @TableRowArray = xCAT::DBobjUtils->getDBtable($table);
+        if ( defined(@TableRowArray) ) {
+            foreach ( @TableRowArray ) {
+                my @nodelist = split(',', $_->{'node'});
+                my @oslist = split(',', $_->{'os'});
+                my $osname = "AIX";
+                if ( grep(/^$node$/, @nodelist) ) {
+                    if ( !grep(/^$osname$/, @oslist) ) {
+                        $cmd.= " -i";
+                    }
+                    $intable = 1;
+                    last;
+                }
+            }
+        }
+        #################################
+        # Force LPAR shutdown if LPAR OS
+        # type is not specified in table
+        # but mnt node is running Linux
+        #################################
+        if ( xCAT::Utils->isLinux() && $intable == 0 ) {
+            $cmd.= " -i";
+        }
     }
 
     #######################################
@@ -161,29 +191,42 @@ sub do_rnetboot {
     #######################################
     $cmd.= " -t ent -f \"$name\" \"$pprofile\" \"$fsp\" $id $hcp \"$node\"";
 
-    #######################################
-    # Execute command
-    #######################################
-    if ( !open( OUTPUT, "$cmd 2>&1 |")) {
-        return( [RC_ERROR,"$cmd fork error: $!"] );
-    }
-    #######################################
-    # Get command output
-    #######################################
-    while ( <OUTPUT> ) {
-        $result.=$_;
-    }
-    close OUTPUT;
-
-    #######################################
-    # Get command exit code
-    #######################################
+    my $done = 0;
     my $Rc = SUCCESS;
+    while ( $done < 2 ) {
+        #######################################
+        # Execute command
+        #######################################
+        if ( !open( OUTPUT, "$cmd 2>&1 |")) {
+            return( [RC_ERROR,"$cmd fork error: $!"] );
+        }
+        #######################################
+        # Get command output
+        #######################################
+        while ( <OUTPUT> ) {
+            $result.=$_;
+        }
+        close OUTPUT;
 
-    foreach ( split /\n/, $result ) {
-        if ( /^lpar_netboot: / ) {
-            $Rc = RC_ERROR;
-            last;
+        #######################################
+        # Get command exit code
+        #######################################
+
+        foreach ( split /\n/, $result ) {
+            if ( /^lpar_netboot: / ) {
+                $Rc = RC_ERROR;
+                last;
+            }
+        }
+
+        if ( $Rc == SUCCESS ) {
+            $done = 2;
+        } else {
+            if ( !exists( $opt->{f} )) {
+                $cmd.= " -i";
+            }
+            $done = $done + 1;
+            sleep 1;
         }
     }
     return( [$Rc,$result] );
@@ -276,11 +319,25 @@ sub rnetboot {
     if ( !defined( $name )) {
         return( [[$node,"Node not found, lparid=$lparid",RC_ERROR]] );
     }
-    #########################################
-    # Manually perform boot. 
-    #########################################
-    $result = do_rnetboot( $request, $d, $exp, $name, $node, \%opt );
+
+    my $sitetab  = xCAT::Table->new('site');
+    my $vcon = $sitetab->getAttribs({key => "conserveronhmc"}, 'value');
+    if ($vcon and $vcon->{"value"} and $vcon->{"value"} eq "yes" ) {
+        $result = xCAT::PPCcli::lpar_netboot(
+                            $exp,
+                            $request->{verbose},
+                            $name,
+                            $d,
+                            \%opt );
+    } else {
+        #########################################
+        # Manually perform boot. 
+        #########################################
+        $result = do_rnetboot( $request, $d, $exp, $name, $node, \%opt );
+    }
+    $sitetab->close;
     $Rc = shift(@$result);
+    
 
     ##################################
     # Form string from array results
