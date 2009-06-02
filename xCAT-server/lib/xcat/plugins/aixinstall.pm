@@ -4308,8 +4308,8 @@ sub doSNcopy
 	# keep track if spot/lpp_source has already been backed up
 	@::resbacked=();
 
-	my @nimresources;
 	foreach my $snkey (keys %$sn) {
+		my @nimresources;
 		if (!&is_me($snkey) ) {
 
 			# running on the management node so
@@ -4790,23 +4790,21 @@ ll~;
 		# define the node 
 		my $defcmd = "/usr/sbin/nim -o define -t $type ";
 		if ($::NEWNAME) {
-			$defcmd .= "-a if1='find_net $nodeshorthost 0' ";
-		} else {
-			$objhash{$node}{'mac'}  =~ s/://g;  # strip out colons if any
-			$defcmd .= "-a if1='find_net $nodeshorthost $objhash{$node}{'mac'}' ";
-		}
+            $defcmd .= "-a if1='find_net $nodeshorthost 0' ";
+        } else {
+            $objhash{$node}{'mac'}  =~ s/://g;  # strip out colons if any
+            $defcmd .= "-a if1='find_net $nodeshorthost $objhash{$node}{'mac'}' ";
+        }
 		$defcmd .= "-a cable_type1=N/A -a netboot_kernel=mp ";
 		$defcmd .= "-a net_definition='ent $nethash{$node}{'mask'} $nethash{$node}{'gateway'}' ";
 		$defcmd .= "-a net_settings1='$speed $duplex' ";
 		$defcmd .= "$nim_name  2>&1";
-
 		if ($::VERBOSE) {
            	my $rsp;
            	push @{$rsp->{data}}, "$Sname: Creating NIM node definition.\n";
            	push @{$rsp->{data}}, "Running: \'$defcmd\'\n";
            	xCAT::MsgUtils->message("I", $rsp, $callback);
 		}
-
        	my $output = xCAT::Utils->runcmd("$defcmd", -1);
        	if ($::RUNCMD_RC  != 0)
        	{
@@ -5591,6 +5589,13 @@ sub rmdsklsnode
     #   - need to change to pass in the callback
     #   - just set global for now
     $::callback=$callback;
+
+	if (defined(@{$::args})) {
+        @ARGV = @{$::args};
+    } else {
+        &rmdsklsnode_usage($callback);
+        return 2;
+    }
 
 	my $Sname = &myxCATname();
 	chomp $Sname;
