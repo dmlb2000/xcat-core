@@ -169,10 +169,10 @@ sub print_var {
 	if(ref($j) eq "ARRAY") {
 	     my $t;
 	     foreach $t(@$j) {
-                if(ref($t) eq "ARRAY") {
-                        my $t0 = join(" ", @$t);
+            if(ref($t) eq "ARRAY") {
+                  my $t0 = join(" ", @$t);
 		#	if(ref($t0) eq "SCALAR") {
-                     	   $var = $var."\t$t0(array)\n";
+                  $var = $var."\t$t0(array)\n";
 		#	} else {
 		#	   &print_var($t0);
 		#	}
@@ -192,11 +192,11 @@ sub print_var {
                         $var = $var. "$t\n";
                 }
 	    }
-        } elsif (ref($j) eq "HASH") {
+   } elsif (ref($j) eq "HASH") {
 		 my $t1;
 		  my $t2;
       	  while(($t1, $t2) =each (%$j)) {
-        	        $var = $var. "$t1 =>";
+        	    $var = $var. "$t1 =>";
                 if(ref($t2) eq "HASH") {
                         my $t12;
                         my $t23;
@@ -210,7 +210,7 @@ sub print_var {
                         $var = $var. "$t2\n";
                 }
 	   }
-        } else {
+    } else {
 		$var = $var. "$j(scalar)\n";
 	}
 
@@ -232,35 +232,35 @@ sub get_lic_filenames {
 	my $filename;
 
 	if(! -d $packages_dir) {
-              $msg = "The directory $packages_dir doesn't exist!";
-              return ("","","", $msg, -1);
-        }
+        $msg = "The directory $packages_dir doesn't exist!";
+        return ("","","", $msg, -1);
+    }
         
 	#print "opening directory and reading names\n";
-        opendir DIRHANDLE, $packages_dir;
-        @dirlist= readdir DIRHANDLE;
-        closedir DIRHANDLE;
+    opendir DIRHANDLE, $packages_dir;
+    @dirlist= readdir DIRHANDLE;
+    closedir DIRHANDLE;
 
-        @dirlist = File::Spec->no_upwards( @dirlist );
+    @dirlist = File::Spec->no_upwards( @dirlist );
 
-        # Make sure we have some files to process
-        #
-        if( !scalar( @dirlist ) ) {
+    # Make sure we have some files to process
+    #
+    if( !scalar( @dirlist ) ) {
         	$msg = "directory $packages_dir is empty";
-                return ("","","",$msg, -1);
-        }
+            return ("","","",$msg, -1);
+    }
 
         $release_level =~/(\w{4})(\d{3})/;
         my $pns = $1;
-	my $fff = $2;
+	    my $fff = $2;
 		
-	#Find the latest version lic file
+	    #Find the latest version lic file
         @dirlist = grep /\.rpm$/, @dirlist;
         @dirlist = grep /$1/, @dirlist;
         if( !scalar( @dirlist ) ) {
-		$msg = "There isn't a package suitable for $mtms";
-                return ("","","",$msg, -1);
-	}
+		     $msg = "There isn't a package suitable for $mtms";
+             return ("","","",$msg, -1);
+	    }
         if( scalar(@dirlist) > 1) {
          # Need to find the latest version package.
         	@dirlist =reverse sort(@dirlist);
@@ -309,7 +309,7 @@ sub get_lic_filenames {
 
 
 sub get_one_mtms {
-	my $exp = shift;
+	    my $exp = shift;
         my $bpa = shift;
         my $cmd = "lssyscfg -r cage -e $bpa";
         my $mtms;
@@ -397,32 +397,29 @@ sub rflash {
 		$mtms_t = "$mtms_t $mtms";
         my $lflag = 0;
 		my $managed_system = $mtms;
-      		if( defined( $housekeeping ) ) {
-               	#$hmc_has_work = 1;
-        	    #$::work_flag = 1;
-             	&dpush(\@value,[$hmc,"$mtms:creating stanza for housekeeping operation\n"]);
-                $stanza = "updlic::" . $managed_system . "::" . $housekeeping . "::::";
+      	if( defined( $housekeeping ) ) {
+            &dpush(\@value,[$hmc,"$mtms:creating stanza for housekeeping operation\n"]);
+            $stanza = "updlic::" . $managed_system . "::" . $housekeeping . "::::";
                     	
-			    &dpush(\@value,[$hmc, "$mtms:Writing $stanza to file\n"]);
-			    #push(@result,[$hmc,"$mtms:$housekeeping successfully!"]);
-                $infor{$mtms} = [$housekeeping];
-                print TMP "$stanza\n";
-       		} else {
+			&dpush(\@value,[$hmc, "$mtms:Writing $stanza to file\n"]);
+			#push(@result,[$hmc,"$mtms:$housekeeping successfully!"]);
+            $infor{$mtms} = [$housekeeping];
+            print TMP "$stanza\n";
+       	} else {
 			while(my ($name, $d) = each(%$h)) {
 				if ( @$d[4] !~ /^(fsp|bpa|lpar)$/ ) {
-               				 push @value,
-                 				 [$name,"Information only available for LPAR/CEC/BPA",RC_ERROR];
-               				 next;
-           		    	}
+               	    push @value, [$name,"Information only available for LPAR/CEC/BPA",RC_ERROR];
+               		next;
+           		}
 			
 				###############
 				#If $name is a Lpar, the flag will be changed from "lpar" to "fsp"
 				#######################
 				if ( @$d[4] =~ /^lpar$/ ) {
-                	        	@$d[4] = "fsp";
-                        		$lflag = 1;
+                	@$d[4] = "fsp";
+                    $lflag = 1;
 					push (@value, [$hmc,"$name is a Lpar on MTMS $mtms", 1]);
-                		}
+                }
 				if( @$d[4] eq "fsp" ) {
 					$component = "system";
 				} else {
@@ -441,13 +438,13 @@ sub rflash {
 				}
 				
 				if ( @$values[0] =~ /ecnumber=(\w+)/ ) {
-                	       		$release_level = $1;
-                       			&dpush( \@value, [$hmc,"$mtms :release level:$1"]);
+                	$release_level = $1;
+                    &dpush( \@value, [$hmc,"$mtms :release level:$1"]);
 				}
 				
 				if ( @$values[0] =~ /activated_level=(\w+)/ ) {
-                        		$active_level = $1;
-                       			&dpush( \@value, [$hmc,"$mtms :activated level:$1"]);
+                    $active_level = $1;
+                    &dpush( \@value, [$hmc,"$mtms :activated level:$1"]);
 				}	
 				my $msg;			
 				my $flag = 0;	
@@ -459,19 +456,13 @@ sub rflash {
 				}
 				dpush ( \@value, [$hmc, $msg]);
 
-                		# If we get to this point, the HMC has to attempt an update on the
-                        	# managed system, so set the flag.
-                        	#
-                        	#$hmc_has_work = 1;
-                        	#::work_flag = 1;
-
-                        	# Collect the rpm and xml file names in a list so we can dcp then
-                       		# in one call.
-                        	#
-                        	if( scalar( grep /$rpm_file/, @rpm_files ) == 0 ) {
-                        		push @rpm_files, $rpm_file;
-                        		push @xml_files, $xml_file;
-                        	}
+                # Collect the rpm and xml file names in a list so we can dcp then
+                # in one call.
+                #
+                if( scalar( grep /$rpm_file/, @rpm_files ) == 0 ) {
+                     push @rpm_files, $rpm_file;
+                     push @xml_files, $xml_file;
+                }
 				my ($volume,$directories,$file) = File::Spec->splitpath($rpm_file);
                 #push(@result,[$hmc, "Upgrade $mtms from release level:$release_level activated level:$active_level to $file successfully"]);
 			
@@ -492,15 +483,15 @@ sub rflash {
 			
 			my $rpm_dest = $::POWER_DEST_DIR."/".$dirlist[0];
 			# The contents of the stanza file are slightly different depending
-              		 # on the operation being performed.
-                	#
-		#	$managed_system = "9125-F2A*0262652";
-               		if( $upgrade_required ) {
-                      		$stanza = "updlic::" . $managed_system . "::upgrade::::$rpm_dest";
-               		} else {
-                	       	$stanza = "updlic::" . $managed_system . "::activate::" . $component . "::" .$rpm_dest;
-               		}
-                	dpush(\@value,[$hmc, "Writing $stanza to file"]);
+            # on the operation being performed.
+            #
+		    #$managed_system = "9125-F2A*0262652";
+            if( $upgrade_required ) {
+                $stanza = "updlic::" . $managed_system . "::upgrade::::$rpm_dest";
+            } else {
+                $stanza = "updlic::" . $managed_system . "::activate::" . $component . "::" .$rpm_dest;
+            }
+            dpush(\@value,[$hmc, "Writing $stanza to file"]);
   			print TMP "$stanza\n";
 			@dirlist = ();
 			$rpm_file = ();
@@ -514,9 +505,9 @@ sub rflash {
 	close TMP;
 	
 	##################################
-    	# Get userid/password
-    	##################################
-    	my $cred = $request->{$hmc}{cred};
+    # Get userid/password
+    ##################################
+    my $cred = $request->{$hmc}{cred};
 	$user =  @$cred[0];
 	
 	dpush(\@value, [$hmc,"user: $user"]);;
@@ -539,10 +530,10 @@ sub rflash {
 	my @res = xCAT::DSHCLI->runDcp_api( \%options, 0);
 	my $Rc = shift(@res);
 	if ($::RUNCMD_RC || $Rc =~ /denied/) {   # error from dcp
-        	my $rsp={};
+        my $rsp={};
 		dpush(\@value, [$hmc,"invoking RunDcp_api()"]);
-        	$rsp->{data}->[0] = "Error from dsh. Return Code = $::RUNCMD_RC";
-        	xCAT::MsgUtils->message("E", $rsp, $::CALLBACK, 1);
+        $rsp->{data}->[0] = "Error from dsh. Return Code = $::RUNCMD_RC";
+        xCAT::MsgUtils->message("E", $rsp, $::CALLBACK, 1);
 		push(@value,[$hmc,$rsp->{data}->[0]]);
 		push(@value,[$hmc,"Failed to copy $tmp_file $rpm_file_list $xml_file_list to $hmc"]);
         #push(@value,[$hmc,"Please check whether the HMC $hmc is configured to allow remote ssh connections"]);
