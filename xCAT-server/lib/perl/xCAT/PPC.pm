@@ -1377,9 +1377,15 @@ sub process_request {
     $request{arg}      = $req->{arg};
     $request{node}     = $req->{node};
     $request{stdin}    = $req->{stdin}->[0]; 
-    $request{hwtype}   = $package; 
+#    $request{hwtype}   = $package; 
     $request{callback} = $callback; 
     $request{method}   = "parse_args";
+    #########################
+    #This is a special case for rspconfig, we shouldn't set hwtype as$package. and reserved for other commands.
+    #########################
+    if($request->{command} ne "rspconfig") {
+        $request->{hwtype}  = $package;
+    }
 
     #For mkvm only so far
     $request{opt}      = $req->{opt} if (exists $req->{opt});
