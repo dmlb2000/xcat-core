@@ -1383,8 +1383,8 @@ sub process_request {
     #########################
     #This is a special case for rspconfig, we shouldn't set hwtype as$package. and reserved for other commands.
     #########################
-    if($request->{command} ne "rspconfig") {
-        $request->{hwtype}  = $package;
+    if($request{command} ne "rspconfig") {
+        $request{hwtype}  = $package;
     }
 
     #For mkvm only so far
