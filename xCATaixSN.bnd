@@ -29,6 +29,8 @@ R:perl-DBD-SQLite-1.13-1.aix5.3.ppc.rpm
 R:net-snmp-5.4.2.1-1.aix5.3.ppc.rpm
 R:net-snmp-devel-5.4.2.1-1.aix5.3.ppc.rpm
 R:net-snmp-perl-5.4.2.1-1.aix5.3.ppc.rpm
+R:openslp-1.2.1-1.aix5.3.ppc.rpm
+R:perl-Crypt-SSLeay-0.57-1.aix5.3.ppc.rpm
 
 # optional
 R:perl-DBD-mysql-4.007-1.aix5.3.ppc.rpm
