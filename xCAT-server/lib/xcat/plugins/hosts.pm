@@ -76,6 +76,21 @@ sub build_line {
 }
 
 
+sub addotherinterfaces {
+  my $node = shift;
+  my $otherinterfaces = shift;
+  my $domain = shift;
+
+    my @itf_pairs=split(/,/, $otherinterfaces);
+    foreach (@itf_pairs) {
+      my ($itf,$ip)=split(/:/, $_);
+      if ($itf =~ /^-/ ) {
+          $itf = $node.$itf };
+      addnode $itf,$ip,'',$domain;
+    }
+}
+
+
 sub process_request {
   Getopt::Long::Configure("bundling") ;
   $Getopt::Long::ignorecase=0;
@@ -139,15 +154,21 @@ sub process_request {
   }
 
   if ($req->{node}) {
-    my $hostscache = $hoststab->getNodesAttribs($req->{node},[qw(ip node hostnames)]);
+    my $hostscache = $hoststab->getNodesAttribs($req->{node},[qw(ip node hostnames otherinterfaces)]);
     foreach(@{$req->{node}}) {
-      my $ref = $hostscache->{$_}->[0]; #$hoststab->getNodeAttribs($_,[qw(ip node hostnames)]);
+      my $ref = $hostscache->{$_}->[0]; #$hoststab->getNodeAttribs($_,[qw(ip node hostnames otherinterfaces)]);
       addnode $ref->{node},$ref->{ip},$ref->{hostnames},$domain;
+      if (defined($ref->{otherinterfaces})){
+         addotherinterfaces $ref->{node},$ref->{otherinterfaces},$domain;
+      }
     }
   } else {
-    my @hostents = $hoststab->getAllNodeAttribs(['ip','node','hostnames']);
+    my @hostents = $hoststab->getAllNodeAttribs(['ip','node','hostnames','otherinterfaces']);
     foreach (@hostents) {
       addnode $_->{node},$_->{ip},$_->{hostnames},$domain;
+      if (defined($_->{otherinterfaces})){
+         addotherinterfaces $_->{node},$_->{otherinterfaces},$domain;
+      }
     }
   }
   writeout();
