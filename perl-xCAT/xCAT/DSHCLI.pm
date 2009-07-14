@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/bin/enr perl
 # IBM(c) 2007 EPL license http://www.eclipse.org/legal/epl-v10.html
 
 package xCAT::DSHCLI;
@@ -2948,26 +2948,32 @@ sub _resolve_nodes
 
     my %resolved_nodes   = ();
     my %unresolved_nodes = ();
-    xCAT::DSHCore->resolve_hostnames($options, \%resolved_nodes,
-                                     \%unresolved_nodes, $context_targets,
-                                     @nodes);
-    xCAT::DSHCore->removeExclude(\%resolved_nodes, $unresolved_targets,
-                                 $context_targets);
-    xCAT::DSHCore->removeExclude($resolved_targets, \%unresolved_nodes,
-                                 $context_targets);
 
-    foreach my $node (keys(%unresolved_nodes))
-    {
-        my $node_properties = $unresolved_nodes{$node};
+	# this build the resolved nodes hash
+    # bypasses the old dsh resolution code
+	# unresolved nodes will be determined when the remote shell runs
+	xCAT::DSHCLI->bld_resolve_nodes_hash($options, \%resolved_nodes, @nodes);
+    # todo remove code
+    #xCAT::DSHCore->resolve_hostnames($options, \%resolved_nodes,
+    #                                 \%unresolved_nodes, $context_targets,
+    #                                 @nodes);
+    #xCAT::DSHCore->removeExclude(\%resolved_nodes, $unresolved_targets,
+    #                             $context_targets);
+    #xCAT::DSHCore->removeExclude($resolved_targets, \%unresolved_nodes,
+    #                             $context_targets);
 
-        $$node_properties{'type'} = 'node';
-        $$unresolved_targets{$node} = $node_properties;
-
-        my $rsp = {};
-        $rsp->{data}->[0] =
-          "The specified node $node address is not resolvable in the cluster.";
-        xCAT::MsgUtils->message("E", $rsp, $::CALLBACK);
-    }
+    #foreach my $node (keys(%unresolved_nodes))
+    #{
+    #    my $node_properties = $unresolved_nodes{$node};
+    #
+    #    $$node_properties{'type'} = 'node';
+    #    $$unresolved_targets{$node} = $node_properties;
+    #
+    #    my $rsp = {};
+    #    $rsp->{data}->[0] =
+    #      "The specified node $node address is not resolvable in the cluster.";
+    #    xCAT::MsgUtils->message("E", $rsp, $::CALLBACK);
+    #}
 
     foreach my $user_node (keys(%resolved_nodes))
     {
@@ -2981,6 +2987,61 @@ sub _resolve_nodes
 
         $result && ($$resolved_targets{$user_node} = $node_properties);
     }
+}
+
+#---------------------------------------------------------------------------
+
+=head3
+        resolve_nodes_hash
+
+        Builds the resolved nodes hash.
+
+        Arguments:
+       	$options - options hash table describing dsh configuration options
+       	$resolved_targets - hash table of resolved properties, keyed by target name
+       	@target_list - input list of target names to resolve
+
+        Returns:
+        	None
+                
+        Globals:
+        	None
+    
+        Error:
+        	None
+    
+        Example:
+
+        Comments:
+
+=cut
+
+#---------------------------------------------------------------------------
+
+sub bld_resolve_nodes_hash
+{
+    my ($class, $options, $resolved_targets, @target_list) = @_;
+
+    foreach my $target (@target_list)
+    {
+
+        my $hostname = $target;
+        my $ip_address;
+        my $localhost;
+        my $user;
+        my $context = "XCAT";
+        my %properties = (
+                          'hostname'   => $hostname,
+                          'ip-address' => $ip_address,
+                          'localhost'  => $localhost,
+                          'user'       => $user,
+                          'context'    => $context,
+                          'unresolved' => $target
+                          );
+
+        $$resolved_targets{"$target"} = \%properties;
+    }
+
 }
 
 #----------------------------------------------------------------------------
@@ -3018,8 +3079,11 @@ sub verify_targets
     my @ping_list;
     foreach my $user_target (keys(%$resolved_targets))
     {
-            my @shorthostname = split(/\./, $user_target);
-            push @ping_list, $shorthostname[0];
+        # todo remove    my @shorthostname = split(/\./, $user_target);
+        #    push @ping_list, $shorthostname[0];
+		my $hostname = $$resolved_targets{$user_target}{'hostname'};
+		push @ping_list, $hostname;
+
     }
 
     if (@ping_list)
