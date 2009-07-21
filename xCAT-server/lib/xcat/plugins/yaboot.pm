@@ -308,7 +308,8 @@ sub process_request {
   }
   
   $errored=0;
-  unless ($args[0] eq 'stat') { # or $args[0] eq 'enact') {
+  #see comments in pxe.pm on the enact case
+  unless ($args[0] eq 'stat' or $args[0] eq 'enact') {
     $sub_req->({command=>['setdestiny'],
            node=>\@nodes,
          arg=>[$args[0]]},\&pass_along);

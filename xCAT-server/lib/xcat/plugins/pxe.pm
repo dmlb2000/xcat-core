@@ -314,7 +314,12 @@ sub process_request {
     @args=($request->{arg});
   }
   $errored=0;
-  unless ($args[0] eq 'stat') { # or $args[0] eq 'enact') {
+  #No idea why I started calling setdestiny for enact, it doesn't make sense
+  #All destiny information should be fine in bootparams, so I'm failing to understand
+ #what I was doing.
+  #If I or someone figures out, be sure to document the logic in this comment 
+  #or svn log entry
+  unless ($args[0] eq 'stat'or $args[0] eq 'enact') {
     $sub_req->({command=>['setdestiny'],
            node=>\@nodes,
          arg=>[$args[0]]},\&pass_along);
