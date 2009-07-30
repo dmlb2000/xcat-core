@@ -10,7 +10,7 @@ There are two times to configure IB adapters, during node installation or with c
 
 To use this script, users need to firstly setup DNS for the new adapters before node installation or before triggering command updatenode depending on when to start IB configuration, either time is supported: 
 
-1.The IP address entries for IB interfaces in /etc/hosts on xCAT managed nodes should have the node short hostname and the unique IB interface name in them.  The format should be <ip_address_for_this_ib_interface node_short_hostname-ib_interfacename>.
+1.The IP address entries for IB interfaces in /etc/hosts on xCAT management nodes should have the node short hostname and the unique IB interface name in them.  The format should be <ip_address_for_this_ib_interface node_short_hostname-ib_interfacename>.
 For example:
 c890f11ec01 is the node short hostname, c890f11ec01-ib0, c890f11ec01-ib1, c890f11ec01-ib2, etc. are the IP names for the IB interfaces on c890f11ec01.
 
@@ -33,20 +33,29 @@ Note: Only if the state of named is active, we can continue to test DNS.
 4.Check if DNS for the IB network has been setup successfully
 nslookup [node_short_hostname-ib_interfacename]
 
-5.Add this script to postscripts
+5.Update /etc/resolv.conf
+If the computer node have already been installed and are runnning, make sure /etc/resolv.conf is available on the compute node before running updatenode, since configiba script will connect to name server to resolve IP address for the IB interfaces. If not, define /etc/resolv.conf on compute node or use rcp to copy resolv.conf from management node to the compute node. Following is an example of /etc/resolv.conf:
+nameserver 172.16.0.13
+domain ppd.pok.ibm.com
+search ppd.pok.ibm.com
+
+Note: 172.16.0.13 is the name server address which could provide the
+IP addresses for IB interfaces on compute nodes.
+
+6.Add this script to postscripts
 chtab node=c890f11ec01 postscripts.postscripts=configiba.1port
 or 
 chtab node=c890f11ec01 postscripts.postscripts=configiba.2ports
 Note: The postscripts name depends on the script copied to /install/postscripts/
 
-6.Now all the preparation work for IB configuration has been done, user can continue the general node installation or trigger updatenode command to configure IB adapters.
+7.Now all the preparation work for IB configuration has been done, user can continue the general node installation or trigger updatenode command to configure IB adapters.
 
 updatenode c890f11ec01 configiba.1port
 or
 updatenode c890f11ec01 configiba.2ports
 
 
-As a sample postscript, the netmask is set to default value: 255.255.0.0 and gateway is set to "X.X.255.254".  If the IB interface name is not a simple combination of short hostname and ibX or netmask and gateway cannot meet user's requirement, user can modify this scripts by himself, like the example below:
+As a sample postscript, the netmask is set to default value: 255.255.255.0 and gateway is set to "X.X.255.254".  If the IB interface name is not a simple combination of short hostname and ibX or netmask and gateway cannot meet user's requirement, user can modify this scripts by himself, like the example below:
 
 The node short hostname is 890f11ec01-en, and the IB interface name is 890f11ec01-ib0, c890f11ec01-ib1, etc. The user needs to modify 
 my $hostname = "$ENV{NODE}-$nic";
