@@ -1,19 +1,25 @@
-#!/bin/sh
+#!/bin/bash
 
 # Build and upload the xcat-core code.  This script and the rest of the xcat-core source should
-# be in a dir called <rel>/src/xcat-code, where <rel> is the same as the release dir it will be
+# be in a dir called <rel>/src/xcat-core, where <rel> is the same as the release dir it will be
 # uploaded to in sourceforge (e.g. devel, or 2.2).
 
-# Usage:  buildcore.sh [promote]
-#		promote - if the keyword "promote" is specified, means an official dot release.
+# Usage:  buildcore.sh [attr=value attr=value ...]
+#		PROMOTE=1 - if the attribute "PROMOTE" is specified, means an official dot release.
 #					Otherwise, and snap build is assumed.
-# You can override the default upload behavior by specifying env var: UP=0 or UP=1
-# You can control which rpms get built by specifying a coresvnup file env var:  SVNUP=<filename>
+# 		UP=0 or UP=1 - override the default upload behavior 
+# 		SVNUP=<filename> - control which rpms get built by specifying a coresvnup file
 
 # you can change this if you need to
 UPLOADUSER=bp-sawyers
 
 set -x
+
+# Process cmd line variable assignments
+for i in $*; do
+	declare `echo $i|cut -d '=' -f 1`=`echo $i|cut -d '=' -f 2`
+done
+
 export HOME=/root
 cd `dirname $0`
 
@@ -23,7 +29,7 @@ D=${CURDIR/\/src\/xcat-core/}
 REL=`basename $D`
 
 VER=`cat Version`
-if [ "$1" = "promote" ]; then
+if [ "$PROMOTE" = 1 ]; then
 	CORE="xcat-core"
 	TARNAME=xcat-core-$VER.tar.bz2
 else
@@ -33,7 +39,7 @@ fi
 DESTDIR=../../$CORE
 
 
-if [ "$1" != "promote" ]; then      # very long if statement to not do builds if we are promoting
+if [ "$PROMOTE" != 1 ]; then      # very long if statement to not do builds if we are promoting
 mkdir -p $DESTDIR
 SRCDIR=../../core-snap-srpms
 mkdir -p $SRCDIR
@@ -71,13 +77,21 @@ if [ $BUILDIT -eq 1 ]; then		# Use to be:  $GREP perl-xCAT $SVNUP; then
    mv /usr/src/$pkg/RPMS/noarch/perl-xCAT-$VER*rpm $DESTDIR/
    mv /usr/src/$pkg/SRPMS/perl-xCAT-$VER*rpm $SRCDIR/
 fi
-if $GREP xCAT-web $SVNUP; then
+# Starting in 2.3 we should build xCAT-UI instead of xCAT-web
+if [ "$REL" = "devel" ]; then
+	UI="UI"
+	MAKEUI=makeuirpm
+else
+	UI="web"
+	MAKEUI=makewebrpm
+fi
+if $GREP xCAT-$UI $SVNUP; then
    UPLOAD=1
-   rm -f $DESTDIR/xCAT-web*
-   rm -f $SRCDIR/xCAT-web*
-   ./makewebrpm
-   mv /usr/src/$pkg/RPMS/noarch/xCAT-web-$VER*rpm $DESTDIR
-   mv /usr/src/$pkg/SRPMS/xCAT-web-$VER*rpm $SRCDIR
+   rm -f $DESTDIR/xCAT-$UI*
+   rm -f $SRCDIR/xCAT-$UI*
+   ./$MAKEUI
+   mv /usr/src/$pkg/RPMS/noarch/xCAT-$UI-$VER*rpm $DESTDIR
+   mv /usr/src/$pkg/SRPMS/xCAT-$UI-$VER*rpm $SRCDIR
 fi
 if $GREP xCAT-server $SVNUP; then
    UPLOAD=1
@@ -164,7 +178,7 @@ fi		# end of very long if-not-promote
 
 # Modify the repo file to point to either xcat-core or core-snap
 cd $DESTDIR
-if [ "$1" = "promote" ]; then
+if [ "$PROMOTE" = 1 ]; then
 	sed -e 's|/core-snap|/xcat-core|' xCAT-core.repo > xCAT-core.repo.new
 	mv -f xCAT-core.repo.new xCAT-core.repo
 else
@@ -178,12 +192,29 @@ tar -hjcvf $TARNAME $CORE
 chgrp xcat $TARNAME
 chmod g+w $TARNAME
 
-# Upload the tarball and individual RPMs to sourceforge
-rsync -rLv --delete $CORE $UPLOADUSER,xcat@web.sourceforge.net:htdocs/yum/$REL/
-if [ "$1" = "promote" -a "$1" != "devel" ]; then
+# Upload the individual RPMs to sourceforge
+while ! rsync -urLv --delete $CORE $UPLOADUSER,xcat@web.sourceforge.net:htdocs/yum/$REL/
+do : ; done
+
+# Upload the tarball to sourceforge
+if [ "$PROMOTE" = 1 -a "$REL" != "devel" ]; then
 	# upload tarball to FRS area
-	scp $TARNAME $UPLOADUSER@web.sourceforge.net:uploads/
-	echo "$TARNAME has been uploaded to the FRS uploads dir.  Remember to move it into the release."
+	#scp $TARNAME $UPLOADUSER@web.sourceforge.net:uploads/
+	echo "$TARNAME has been built.  Remember to upload it to sourceforge using its File Manager."
 else
-	scp $TARNAME $UPLOADUSER,xcat@web.sourceforge.net:htdocs/yum/$REL/
+	while ! rsync -v $TARNAME $UPLOADUSER,xcat@web.sourceforge.net:htdocs/yum/$REL/
+	do : ; done
+fi
+
+# Extract and upload the man pages in html format
+if [ "$REL" = "devel" -a "$PROMOTE" != 1 ]; then
+	mkdir -p man
+	cd man
+	rm -rf opt
+	rpm2cpio ../$CORE/xCAT-client-*.noarch.rpm | cpio -id '*.html'
+	rpm2cpio ../$CORE/perl-xCAT-*.noarch.rpm | cpio -id '*.html'
+	# Note: for some reason scp kept getting "Connection reset by peer" part way thru
+	while ! rsync -rv opt/xcat/share/doc/man1 opt/xcat/share/doc/man3 opt/xcat/share/doc/man5 opt/xcat/share/doc/man7 opt/xcat/share/doc/man8 $UPLOADUSER,xcat@web.sourceforge.net:htdocs/
+	do : ; done
+	cd ..
 fi
