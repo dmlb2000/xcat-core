@@ -47,12 +47,13 @@ if [ $UPLOAD == 0 ]; then
  exit 0;
 fi
 
-# Upload the dir structure to SF yum area.  Currently we do not have it preserver permissions
+# Upload the dir structure to SF yum area.  Currently we do not have it preserving permissions
 # because that gives errors when different users try to do it.
-rsync -rlv * $UPLOADUSER,xcat@web.sourceforge.net:htdocs/yum/xcat-dep/
+while ! rsync -rlv --delete * $UPLOADUSER,xcat@web.sourceforge.net:htdocs/yum/xcat-dep/
+do : ; done
 #ssh jbjohnso@shell1.sf.net "cd /home/groups/x/xc/xcat/htdocs/yum/; rm -rf dep-snap; tar jxvf $DFNAME"
 
-# Upload the tarball to the SF uploads dir for the FRS
-scp ../$DFNAME $UPLOADUSER@web.sourceforge.net:uploads/
-echo "$DFNAME has been uploaded to the FRS uploads dir.  Remember to move it into the release."
-#scp ../$DFNAME $UPLOADUSER@frs.sourceforge.net:uploads/
+# Upload the tarball to the SF FRS Area
+#scp ../$DFNAME "$UPLOADUSER@web.sourceforge.net:/home/frs/project/x/xc/xcat/xcat-dep/2.x Linux/"
+while ! rsync -v ../$DFNAME "$UPLOADUSER,xcat@web.sourceforge.net:/home/frs/project/x/xc/xcat/xcat-dep/2.x Linux/"
+do : ; done
