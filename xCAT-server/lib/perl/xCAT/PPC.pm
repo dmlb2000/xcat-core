@@ -353,9 +353,6 @@ sub process_command {
                         $mactab->close();
                     }
 
-                    $callback->({data=>["$_:"]});
-                    $callback->({data=>["#IP           MAC"]});
-                    $callback->({data=>["$ip  $mac\n"]});
                     $callback->({node=>[{name=>[$_],data=>["\n#IP           MAC\n$ip  $mac\n"]}]});
                 }
             } else {
