@@ -51,8 +51,9 @@ my %distnames = (
                  "1210111941.792844" => "fedora9",
                  "1227147467.285093" => "fedora10",
                  "1227142402.812888" => "fedora10",
-                 "1243981097.897160" => "fedora11", #x86_64 DVD ISO
-                 "1257725234.740991" => "fedora12", #x86_64 DVD ISO
+		"1243981097.897160" => "fedora11", #x86_64 DVD ISO
+		"1257725234.740991" => "fedora12", #x86_64 DVD ISO
+
                  "1194512200.047708" => "rhas4.6",
                  "1194512327.501046" => "rhas4.6",
                  );
@@ -67,6 +68,8 @@ sub handled_commands
             copycd    => "anaconda",
             mknetboot => "nodetype:os=(centos.*)|(rh.*)|(fedora.*)",
             mkinstall => "nodetype:os=(esx[34].*)|(centos.*)|(rh.*)|(fedora.*)",
+            mkstatelite => "nodetype:os=(esx[34].*)|(centos.*)|(rh.*)|(fedora.*)",
+	
             };
 }
 
@@ -147,7 +150,8 @@ sub process_request
     {
         return mkinstall($request, $callback, $doreq);
     }
-    elsif ($request->{command}->[0] eq 'mknetboot')
+    elsif ($request->{command}->[0] eq 'mknetboot' or 
+	$request->{command}->[0] eq 'mkstatelite')
     {
         return mknetboot($request, $callback, $doreq);
     }
@@ -159,6 +163,10 @@ sub mknetboot
     my $req      = shift;
     my $callback = shift;
     my $doreq    = shift;
+    my $statelite = 0;
+    if($req->{command}->[0] =~ 'mkstatelite'){
+        $statelite = "true";
+    }
     my $tftpdir  = "/tftpboot";
     my $nodes    = @{$req->{node}};
     my @args     = @{$req->{arg}};
@@ -170,6 +178,7 @@ sub mknetboot
     my %img_hash=();
     my $installroot;
     $installroot = "/install";
+    my $xcatdport = "3001";
 
     if ($sitetab)
     {
@@ -178,16 +187,27 @@ sub mknetboot
         {
             $installroot = $ref->{value};
         }
+        ($ref) = $sitetab->getAttribs({key => 'xcatdport'}, 'value');
+        if ($ref and $ref->{value})
+        {
+            $xcatdport = $ref->{value};
+        }
     }
     my %donetftp=();
     my %oents = %{$ostab->getNodesAttribs(\@nodes,[qw(os arch profile provmethod)])};
     my $restab = xCAT::Table->new('noderes');
     my $bptab  = xCAT::Table->new('bootparams',-create=>1);
     my $hmtab  = xCAT::Table->new('nodehm');
-    my $reshash    = $restab->getNodesAttribs(\@nodes, ['primarynic','tftpserver','xcatmaster']);
+    my $reshash    = $restab->getNodesAttribs(\@nodes, ['primarynic','tftpserver','xcatmaster','nfsserver','nfsdir']);
     my $hmhash =
           $hmtab->getNodesAttribs(\@nodes,
                                  ['serialport', 'serialspeed', 'serialflow']);
+    my $statetab;
+    my $stateHash;
+    if($statelite){
+        $statetab = xCAT::Table->new('statelite',-create=>1);
+        $stateHash = $statetab->getNodeAttribs(\@nodes, ['statemnt']);
+    }
     #my $addkcmdhash =
     #    $bptab->getNodesAttribs(\@nodes, ['addkcmdline']);
     foreach my $node (@nodes)
@@ -199,7 +219,7 @@ sub mknetboot
         my $rootimgdir;
 
         my $ent = $oents{$node}->[0]; #ostab->getNodeAttribs($node, ['os', 'arch', 'profile']);
-        if ($ent and $ent->{provmethod} and ($ent->{provmethod} ne 'install') and ($ent->{provmethod} ne 'netboot')) {
+        if ($ent and $ent->{provmethod} and ($ent->{provmethod} ne 'install') and ($ent->{provmethod} ne 'netboot') and ($ent->{provmethod} ne 'statelite')) {
 	    my $imagename=$ent->{provmethod};
 	    #print "imagename=$imagename\n";
 	    if (!exists($img_hash{$imagename})) {
@@ -265,25 +285,31 @@ sub mknetboot
         {
             $suffix = 'nfs';
         }
+	#statelite images are not packed.  
         unless (
                 (
                     -r "$rootimgdir/rootimg.gz"
                  or -r "$rootimgdir/rootimg.sfs"
                  or -r "$rootimgdir/rootimg.nfs"
+		 or $statelite
                 )
                 and -r "$rootimgdir/kernel"
                 and -r "$rootimgdir/initrd.gz"
           )
         {
-            $callback->(
-                {
-                 error => [
-                     "No packed image for platform $osver, architecture $arch, and profile $profile, please run packimage (i.e.  packimage -o $osver -p $profile -a $arch"
-                 ],
-                 errorcode => [1]
-                }
-                );
-            next;
+		if($statelite){
+			$callback->({error=> ["$node: statelite image $osver-$arch-$profile does not exist"], errorcode =>[1] });
+		}else{
+            		$callback->(
+                	{
+                 	error => [
+                     	"No packed image for platform $osver, architecture $arch, and profile $profile, please run packimage (i.e.  packimage -o $osver -p $profile -a $arch"
+                 	],
+                 	errorcode => [1]
+                	}
+                	);
+		}
+            	next;
         }
 
         # create the node-specific post scripts
@@ -371,6 +397,29 @@ sub mknetboot
             $kcmdline =
               "imgurl=nfs://$imgsrv/install/netboot/$osver/$arch/$profile/rootimg ";
         }
+	elsif($statelite){
+		# get entry for nfs root if it exists:
+		# have to get nfssvr and nfsdir from noderes table
+		my $nfssrv = $imgsrv;
+		my $nfsdir = $rootimgdir;
+		if($ient->{nfsserver} ){
+			$nfssrv = $ient->{nfsserver};
+		}
+		if($ient->{nfsdir} ne ''){	
+			$nfsdir = $ient->{nfsdir} . "/netboot/$osver/$arch/$profile";
+			
+		}
+
+		$kcmdline = 
+		"NFSROOT=$nfssrv:$nfsdir STATEMNT=";	
+		if($stateHash->{statemnt} ){
+			$kcmdline .= $stateHash->{statemnt} . " ";
+		}else{
+			$kcmdline .= " ";
+		}
+		$kcmdline .=
+			"XCAT=$imgsrv:$xcatdport ";
+	}
         else
         {
             $kcmdline =
