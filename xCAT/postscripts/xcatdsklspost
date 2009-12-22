@@ -133,8 +133,12 @@ if [ $# -gt 0 ]; then
   echo "$TMP" > /tmp/mypostscript;
 fi
 
+# postscript name is specified with the updatenode 
 if [ $# -gt 1 ]; then
   POSTS=$2
+  #remove all the postbootscripts
+  TMP=`sed "/postbootscripts-start-here/,/postbootscripts-end-here/ d" /tmp/mypostscript`
+  echo "$TMP" > /tmp/mypostscript
   #remove all the postscripts
   TMP=`sed "/postscripts-start-here/,/postscripts-end-here/ d" /tmp/mypostscript`
   echo "$TMP" > /tmp/mypostscript
