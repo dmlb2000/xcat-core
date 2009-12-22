@@ -45,6 +45,26 @@ set -x
 # %defattr( 555, root, root, 755 )
 %{prefix}/ui
 
+%pre
+# the %pre part is used to inspect whether the php-related rpm packages are installed into linux or not
+# if they're not installed, the installation of "xCAT-UI" will be failed.
+%ifos linux
+if [ -e "/etc/redhat-release" ]; then
+	rpm -q php >/dev/null
+	if [ $? != 0 ]; then
+		echo ""
+		echo "Error! php has not been installed yet;please run 'yum install php' before installing xCAT-UI";
+		exit -1;
+	fi
+else	#SUSE
+	rpm -q apache2-mod_php5 php5 >/dev/null
+	if [ $? != 0 ]; then
+		echo ""
+		echo "Error! apache2-mod_php5 and php5 have not been installed yet; please run 'zypper install apache2-mod_php5 php5'before installing xCAT-UI"
+		exit -1;
+	fi
+fi
+%endif
 
 %post
 # Post-install script---------------------------------------------------
@@ -59,6 +79,7 @@ if [ -e "/etc/redhat-release" ]; then
 	#cp /etc/passwd /etc/passwd.orig
 	#perl -e 'while (<>) { s,^apache:(.*):/sbin/nologin$,apache:$1:/bin/bash,; print $_; }' /etc/passwd.orig >/etc/passwd
 else    # SuSE
+
   	apachedaemon='apache2'
   	apacheuser='wwwrun'
 fi
@@ -70,6 +91,8 @@ then
   /bin/rm -f /etc/$apachedaemon/conf.d/xcat-ui.conf
   /bin/ln -s %{prefix}/ui/etc/apache2/conf.d/xcat-ui.conf /etc/$apachedaemon/conf.d/xcat-ui.conf
   /etc/init.d/$apachedaemon reload
+  # automatically put the encrypted passwd into the xcat passwd db
+  %{prefix}/sbin/chtab key=xcat,username=root passwd.password=`grep root /etc/shadow|cut -d : -f 2`
 
   # Link to the grpattr cmd.  Note: this was for xcat 1.3.  Do not use this anymore.
   #/bin/rm -f %{prefix}/bin/grpattr
@@ -100,12 +123,27 @@ fi
 ihs_config_dir='/usr/IBM/HTTPServer/conf'
 if [ "$1" = 1 ] #initial install
 then
-    # Update the apache config
-    echo "Updating ibm http server configuration for xCAT..."
-    /bin/rm -f /usr/IBM/HTTPServer/conf/xcat-ui.conf
-    cp /usr/IBM/HTTPServer/conf/httpd.conf /usr/IBM/HTTPServer/conf/httpd.conf.xcat.ui.bak
-    cat /opt/xcat/ui/etc/apache2/conf.d/xcat-ui.conf >> /usr/IBM/HTTPServer/conf/httpd.conf
-    /usr/IBM/HTTPServer/bin/apachectl restart
+    # check if IBM HTTP Server is installed into the default directory or not
+    if [ -f "/usr/IBM/HTTPServer/conf/httpd.conf" ]; then
+        # Update the apache config
+        echo "Updating ibm http server configuration for xCAT..."
+        /bin/rm -f /usr/IBM/HTTPServer/conf/xcat-ui.conf
+        cp /usr/IBM/HTTPServer/conf/httpd.conf /usr/IBM/HTTPServer/conf/httpd.conf.xcat.ui.bak
+        cat /opt/xcat/ui/etc/apache2/conf.d/xcat-ui.conf >> /usr/IBM/HTTPServer/conf/httpd.conf
+        /usr/IBM/HTTPServer/bin/apachectl restart
+
+        # put the encrypted password in /etc/security/passwd to the xcat passwd db
+        CONT=`cat /etc/security/passwd`
+        %{prefix}/sbin/chtab key=xcat,username=root passwd.password=`echo $CONT |cut -d ' ' -f 4`
+    else
+	echo ""
+	echo "Error!"
+	echo "The IBM HTTP Server is not installed or not installed into the default directory(/usr/IBM/HTTPServer/)"
+    fi
+
+    # put the encrypted password in /etc/security/passwd to the xcat passwd db
+    CONT=`cat /etc/security/passwd`
+    %{prefix}/sbin/chtab key=xcat,username=root passwd.password=`echo $CONT |cut -d ' ' -f 4`
 fi
 
 if [ "$1" = 1 ] || [ "$1" = 2 ]      # initial install, or upgrade and this is the newer rpm
@@ -154,8 +192,10 @@ fi
 %else   #for AIX
 # Remove links made during the post install script
 echo "Undoing IBM HTTP Server configuration for xCAT..."
-cp /usr/IBM/HTTPServer/conf/httpd.conf.xcat.ui.bak /usr/IBM/HTTPServer/conf/httpd.conf
-rm -rf /usr/IBM/HTTPServer/conf/httpd.conf.xcat.ui.bak
+if [ -f "/usr/IBM/HTTPServer/conf/httpd.conf.xcat.ui.bak" ];then
+    cp /usr/IBM/HTTPServer/conf/httpd.conf.xcat.ui.bak /usr/IBM/HTTPServer/conf/httpd.conf
+    rm -rf /usr/IBM/HTTPServer/conf/httpd.conf.xcat.ui.bak
+fi
 /usr/IBM/HTTPServer/bin/apachectl restart
 %endif
 

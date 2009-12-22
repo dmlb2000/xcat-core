@@ -4,6 +4,9 @@
 function openlogdialog (data, textstatus) { //open the log in dialog if not logged in
 	if (data.authenticated == "no") {
 		$('#logdialog').dialog("open"); }
+        else {
+            $("#wrapper").show();
+        }
 }
 
 function onlogin (data, textstatus) {
@@ -59,7 +62,7 @@ function openDialog(){
 	    background: "#2e2e2e url(img/auth.gif) repeat",
             opacity: 1.0
         },
-        height: 250,
+        height: 275,
         width: 350,
         autoOpen: true,
         buttons: {
@@ -76,7 +79,7 @@ function openDialog(){
             } else {
                 $("#password").focus();
             }
-        },
+        }
     });
 
     $("#username").keydown(function(event) { //When 'enter' is hit while in username, advance to password
@@ -86,7 +89,13 @@ function openDialog(){
     });
     $("#password").keydown(function(event) { //Submit authentication if enter is pressed in password field
         if (event.keyCode==13) {
-            authenticate();
+            //TODO: it does not work on Chrome and Safari
+            $(".ui-dialog-buttonpane button").each(function() {
+                if($(this).html() == "Log In") {
+                    $(this).click();
+                }
+            });
+            //authenticate();
         }
     });
 	  
