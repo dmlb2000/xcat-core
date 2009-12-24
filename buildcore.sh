@@ -55,6 +55,7 @@ REL=`basename $D`
 XCATCORE="xcat-core"
 svn up Version
 VER=`cat Version`
+SHORTVER=`cat Version|cut -d. -f 1,2`
 if [ "$PROMOTE" = 1 ]; then
 	CORE="xcat-core"
 	if [ "$OSNAME" = "AIX" ]; then
@@ -160,9 +161,8 @@ if $GREP xCAT-rmc $SVNUP; then
    mv $source/RPMS/$NOARCH/xCAT-rmc-$VER*rpm $DESTDIR
    mv $source/SRPMS/xCAT-rmc-$VER*rpm $SRCDIR
 fi
-if [ "$OSNAME" = "AIX" ]; then
-	echo "rpm -Uvh xCAT-rmc-$VER-*rpm" >> $DESTDIR/instxcat
-fi
+# Note: not putting xCAT-rmc into instxcat for aix here, because it has to be installed
+#		after xCAT.
 
 if [ "$OSNAME" != "AIX" ]; then
 	if $GREP xCAT-nbroot $SVNUP; then
@@ -180,8 +180,8 @@ fi
 if [ "$OSNAME" != "AIX" ]; then
 	if $GREP -E '^[UAD] +xCATsn/' $SVNUP; then
 	   UPLOAD=1
-	   rm -f $DESTDIR/xCATsn-$REL*rpm
-	   rm -f $SRCDIR/xCATsn-$REL*rpm
+	   rm -f $DESTDIR/xCATsn-$SHORTVER*rpm
+	   rm -f $SRCDIR/xCATsn-$SHORTVER*rpm
 	   ./makexcatsnrpm x86_64
 	   mv $source/RPMS/*/xCATsn-$VER*rpm $DESTDIR
 	   mv $source/SRPMS/xCATsn-$VER*rpm $SRCDIR
@@ -196,8 +196,8 @@ fi
 
 if $GREP -E '^[UAD] +xCAT/' $SVNUP; then
    UPLOAD=1
-   rm -f $DESTDIR/xCAT-$REL*rpm
-   rm -f $SRCDIR/xCAT-$REL*rpm
+   rm -f $DESTDIR/xCAT-$SHORTVER*rpm
+   rm -f $SRCDIR/xCAT-$SHORTVER*rpm
 	if [ "$OSNAME" = "AIX" ]; then
 	   ./makexcatrpm
 	   mv $source/RPMS/*/xCAT-$VER*rpm $DESTDIR
@@ -217,6 +217,7 @@ fi
 
 if [ "$OSNAME" = "AIX" ]; then
 	echo "rpm -Uvh xCAT-$VER-*rpm" >> $DESTDIR/instxcat
+	echo "rpm -Uvh xCAT-rmc-$VER-*rpm" >> $DESTDIR/instxcat
 	# add the service node bundle files 
 	cp xCATaixSN.bnd xCATaixSN2.bnd xCATaixSSH.bnd xCATaixSSL.bnd $DESTDIR/
 fi
