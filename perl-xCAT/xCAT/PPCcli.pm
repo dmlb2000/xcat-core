@@ -92,8 +92,21 @@ my %rmsysconn = (
 # lssysconn support formats
 ##############################################
 my %lssysconn = (
-    all => "lssysconn -r all"
+    all  => "lssysconn -r all",
+    alls => "lssysconn -r all -F %s"
 );
+
+##############################################
+# Change IP address for managed systems
+# or frames
+##############################################
+my %chsyspwd = (
+    initial_fsp => "chsyspwd -t %s -m %s --newpasswd %s",
+    initial_bpa => "chsyspwd -t %s -e %s --newpasswd %s",
+    fsp => "chsyspwd -t %s -m %s --newpasswd %s --passwd %s",
+    bpa => "chsyspwd -t %s -e %s --newpasswd %s --passwd %s"
+);
+
 
 ##########################################################################
 # Logon to remote server
@@ -1205,8 +1218,10 @@ sub network_reset {
 ##########################################################################
 sub lssysconn
 {
-    my $exp = shift;
-    my $cmd = $lssysconn{all};
+    my $exp    = shift;
+    my $res    = shift;
+    my $filter = shift;
+    my $cmd = sprintf( $lssysconn{$res}, $filter );
     my $result = send_cmd( $exp, $cmd);
     return ( $result);
 }
@@ -1224,6 +1239,32 @@ sub mksysconn
     my $cmd = sprintf( $mksysconn{$type}, $ip, $passwd);
     my $result = send_cmd( $exp, $cmd);
     return ( $result);
+}
+
+##########################################################################
+# Change IP address for managed systems or frames
+##########################################################################
+sub chsyspwd
+{
+    my $exp    = shift;
+    my $user   = shift;
+    my $type   = shift;
+    my $mtms   = shift;
+    my $newpwd = shift;
+    my $pwd    = shift;
+    my $cmd;
+
+    $user =~ s/^HMC$/access/;
+
+    if ( !$pwd ) {
+        $cmd = sprintf( $chsyspwd{"initial_$type"}, $user, $mtms, $newpwd );
+    } else {
+        $cmd = sprintf( $chsyspwd{$type}, $user, $mtms, $newpwd, $pwd );
+    }
+
+    my $result = send_cmd( $exp, $cmd);
+
+    return ( $result );
 }
 
 ##########################################################################
