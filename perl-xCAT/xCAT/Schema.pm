@@ -633,6 +633,7 @@ site => {
    "  nameservers:\tA comma delimited list of DNS servers that each node in the cluster should use - often the xCAT management node.\n\n".
    "  nodestatus:\tIf set to 'n', the nodelist.status column will not be updated during the node deployment, node discovery and power operation.\n\n".
    "  ntpservers:\tA comma delimited list of NTP servers for the cluster - often the xCAT management node.\n\n".
+   "  powerinterval:\tThe time of seconds that rpower command will wait between performing action on each target object, it is useful especially for controlling the cluster boot up speed in large clusters.\n\n".
    "  ppcmaxp:\tThe max # of processes for PPC hw ctrl. Default is 64.\n\n".
    "  ppcretry:\tThe max # of PPC hw connection attempts before failing. Default is 3.\n\n".
    "  ppctimeout:\tThe timeout, in milliseconds, to use when communicating with PPC hw. Default is 0.\n\n".
