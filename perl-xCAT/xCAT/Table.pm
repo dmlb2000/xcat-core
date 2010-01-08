@@ -90,7 +90,6 @@ sub dbc_submit {
     $data.= "\nENDOFFREEZEQFVyo4Cj6Q0v\n";
     my $clisock;
     while(!($clisock = IO::Socket::UNIX->new(Peer => $dbsockpath, Type => SOCK_STREAM, Timeout => 120) ) ) {
-        #print "waiting for clisock to be available\n";
         sleep 0.1;
     }
     unless ($clisock) {

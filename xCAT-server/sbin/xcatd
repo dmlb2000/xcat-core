@@ -654,7 +654,6 @@ if ($inet6support) {
     $peerhost =~ s/-eth\d*$//;
     $peerhost =~ s/-myri\d*$//;
     $peerhost =~ s/-ib\d*$//;
-    #printf('info'.": xcatd: connection from ".($peername ? $peername . "@" . $peerhost : $peerhost)."\n");
     $$progname="xCATd SSL: Instance for ".($peername ? $peername ."@".$peerhost : $peerhost);
     service_connection($connection,$peername,$peerhost,$peerfqdn);
     xexit(0);
