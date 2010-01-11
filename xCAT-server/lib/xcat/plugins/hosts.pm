@@ -10,10 +10,12 @@ use Getopt::Long;
 
 my @hosts; #Hold /etc/hosts data to be written back
 my $LONGNAME;
+my $OTHERNAMESFIRST;
+my $ADDNAMES;
 
 
 my %usage=(
-    makehosts => "Usage: makehosts <noderange> [-n] [-l]\n       makehosts -h",
+    makehosts => "Usage: makehosts <noderange> [-n] [-l] [-a] [-o]\n       makehosts -h",
 );
 sub handled_commands {
   return {
@@ -54,6 +56,7 @@ sub build_line {
     my $domain=shift;
     my $othernames=shift;
     my @o_names=();
+    my @n_names=();
     if (defined $othernames) {
          @o_names=split(/,| /, $othernames);
     }
@@ -67,8 +70,11 @@ sub build_line {
 		$longname=$_;
 		$_="";
 	    }
-	}
+	} elsif ($ADDNAMES) {
+        unshift(@n_names,"$_.$domain");
     } 
+    }
+    unshift(@o_names,@n_names);
 
     if ($node =~ m/\.$domain$/i) {
         $longname = $node;
@@ -79,6 +85,7 @@ sub build_line {
 
     $othernames=join(' ', @o_names);
     if ($LONGNAME) { return "$ip $longname $node $othernames\n"; } 
+    elsif ($OTHERNAMESFIRST) { return "$ip $othernames $longname $node\n"; }
     else { return "$ip $node $longname $othernames\n"; }
 }
 
@@ -116,6 +123,8 @@ sub process_request {
   if(!GetOptions(
       'h|help'  => \$HELP,
       'n'  => \$REMOVE,
+      'o|othernamesfirst'  => \$OTHERNAMESFIRST,
+      'a|adddomaintohostnames'  => \$ADDNAMES,
       'l|longnamefirst'  => \$LONGNAME,))
   {
     $callback->({data=>$usage{makehosts}});
