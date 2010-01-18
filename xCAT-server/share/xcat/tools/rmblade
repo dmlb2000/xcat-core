@@ -29,7 +29,10 @@ sub rmblade {
 	`makedhcp -d $blade`;
 	print FILE "Running: rm /tftpboot/pxelinux.cfg/$blade\n";
 	`rm  /tftpboot/pxelinux.cfg/$blade`;
-	print FILE "Running: rm /tftpboot/pxelinux.cfg/$hex\n";
+	if($hex){
+		print FILE "Running: rm /tftpboot/pxelinux.cfg/$hex\n";
+		`rm  /tftpboot/pxelinux.cfg/$hex`;
+	}
 }
 
 sub ip2hex {
@@ -37,11 +40,10 @@ sub ip2hex {
 	my $ip = '';
 	my @quad;
 	my $hex = '';
-	my $node = $ARGV[0];
 	my $packed_ip = gethostbyname($node);
 	if(defined $packed_ip){
 		$ip = inet_ntoa($packed_ip);	
-print FILE "IP that was removed is $ip\n";
+		print FILE "IP that was removed is $ip\n";
 		@quad = split('\.', $ip);
 		$hex = sprintf("%02X%02X%02X%02X", @quad);
 	}
