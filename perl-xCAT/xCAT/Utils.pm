@@ -2200,6 +2200,26 @@ sub my_nets
         $textnet.="/$maskbits";
         $rethash->{$textnet} = $curnet;
     }
+
+
+    # this is to get remote nodes to support distributed networks where
+    # dhcp is forwarded from scripts.
+    my $nettab = xCAT::Table->new("networks");
+    my @vnets = $nettab->getAllAttribs('net','mgtifname','mask');
+    foreach(@vnets){
+      my $n = $_->{net};
+      my $if = $_->{mgtifname};
+      my $nm = $_->{mask}; 
+      # we look to see if the network tab is set to be remote.
+      if ($if =~ /!remote!/) { #only take in networks with special interface
+        $nm = formatNetmask($nm, 0 , 1);
+        $n .="/$nm";            
+        $rethash->{$n} = $if;   
+      }                 
+    }
+	
+
+
     return $rethash;
 }
 #-------------------------------------------------------------------------------
