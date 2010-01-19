@@ -35,12 +35,14 @@ my %lssyscfg = (
   bpa    =>"lssyscfg -r frame -e %s -F %s",
   bpas   =>"lssyscfg -r frame -F %s",
   prof   =>"lssyscfg -r prof -m %s --filter %s",
+  profs  =>"lssyscfg -r prof -m %s -F %s --filter %s",
   cage   =>"lssyscfg -r cage -e %s -F %s"
 );
 
 my %chsyscfg = (
   prof   =>"chsyscfg -r prof -m %s -i %s",
-  bpa    =>"chsyscfg -r frame -e %s -i frame_num=%s"
+  bpa    =>"chsyscfg -r frame -e %s -i frame_num=%s",
+  sys    =>"chsyscfg -r sys -m %s -i %s"
 );
 
 ##############################################

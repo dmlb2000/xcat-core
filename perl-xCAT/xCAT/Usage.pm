@@ -130,6 +130,7 @@ my %usage = (
     For PPC:
        mkvm noderange -i id -l singlenode [-V|--verbose]
        mkvm noderange -c destcec -p profile [-V|--verbose]
+       mkvm noderange --full [-V|--verbose]
     For KVM
        mkvm noderange -m|--master mastername -s|--size disksize -f|--force",
     "lsvm" => 
@@ -144,7 +145,7 @@ my %usage = (
        chvm [-h|--help|-v|--version]
        chvm <noderange> <attr>=<val> [<attr>=<val>...]",
     "rmvm" => 
-"Usage: rmvm <noderange> [-V|--verbose] 
+"Usage: rmvm <noderange> [--service] [-V|--verbose] 
        rmvm [-h|--help|-v|--version]",
     "lsslp" =>
 "Usage: lsslp [-h|--help|-v|--version]
