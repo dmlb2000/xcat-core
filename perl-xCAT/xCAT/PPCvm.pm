@@ -146,7 +146,6 @@ sub mkvm_parse_args {
     @ARGV = @$args;
     $Getopt::Long::ignorecase = 0;
     Getopt::Long::Configure( "bundling" );
-
     if ( !GetOptions( \%opt, qw(V|verbose ibautocfg ibacap=s i=s l=s c=s p=s full) )) {
         return( usage() );
     }
@@ -236,7 +235,6 @@ sub mkvm_parse_args {
         }
         $opt{cec} = \@noderange;
     }
-
 #################################################
 # Swap the targets to be processed in PPC.pm
 #################################################
@@ -252,7 +250,6 @@ sub mkvm_parse_args {
         $request->{node} = [@{$opt{cec}}];
         $request->{noderange} = $opt{c};
     }    
-
 #############################################
 # Only 1 node allowed 
 #############################################
@@ -382,7 +379,7 @@ sub rmvm_parse_args {
     $Getopt::Long::ignorecase = 0;
     Getopt::Long::Configure( "bundling" );
 
-    if ( !GetOptions( \%opt, qw(V|verbose) )) {
+    if ( !GetOptions( \%opt, qw(V|verbose service) )) {
         return( usage() );
     }
     ####################################
@@ -619,15 +616,15 @@ sub remove {
     my $request = shift;
     my $hash    = shift;
     my $exp     = shift;
+    my $opt     = $request->{opt};
     my @lpars   = ();
     my @values  = ();
-
+    
     while (my ($mtms,$h) = each(%$hash) ) {
         while (my ($lpar,$d) = each(%$h) ) {
             my $lparid = @$d[0];
             my $mtms   = @$d[2];
             my $type   = @$d[4];
-
             ####################################
             # Must be CEC or LPAR
             ####################################
@@ -652,7 +649,6 @@ sub remove {
                                              $mtms,
                                              $filter );
                 my $Rc = shift(@$result);
-
                 ################################
                 # Expect error
                 ################################
@@ -674,33 +670,38 @@ sub remove {
 		my $lparinfo   = shift(@lpars);
                 my ($name,$id) = split /,/, $lparinfo;
                 my $mtms = @$d[2];
-                my $service_lparid = xCAT::PPCcli::lssyscfg(
-                                              $exp,
-                                              "fsp",
-                                              $mtms,
-                                              "service_lpar_id" );
-                my $Rc = shift(@$service_lparid);
                 
-		#####################################################
-                # Change the CEC's state to standby and set it's service lpar id to none
-                #####################################################
-                if ( $Rc == SUCCESS ) {
-                    my $cfgdata = @$service_lparid[0];
-                    if ( ($id == $cfgdata) && ($cfgdata !~ /none/) ) {
-                    	$cfgdata = "service_lpar_id=none";
-                        my $result = xCAT::PPCcli::chsyscfg( $exp, "sys", $d, $cfgdata );
-                        $Rc = shift(@$result);
-                        if ( $Rc != SUCCESS ) {
-                        	return( [[$lpar, @$service_lparid[0], $Rc]] );
-                        }
-                    }
-                }
-
-                ################################  
+		if ($opt->{service}) {
+	                ###############################################
+	                # begin to retrieve the CEC's service lpar id
+	                ############################################### 
+                	my $service_lparid = xCAT::PPCcli::lssyscfg(
+                        	                      $exp,
+                                	              "fsp",
+                                        	      $mtms,
+                                              	"service_lpar_id" );
+                	my $Rc = shift(@$service_lparid);
+                
+			#####################################################
+                	# Change the CEC's state to standby and set it's service lpar id to none
+                	#####################################################
+                	if ( $Rc == SUCCESS ) {
+                    	my $cfgdata = @$service_lparid[0];
+                    		if ( ($id == $cfgdata) && ($cfgdata !~ /none/) ) {
+                    			$cfgdata = "service_lpar_id=none";
+                        		my $result = xCAT::PPCcli::chsyscfg( $exp, "sys", $d, $cfgdata );
+                        		$Rc = shift(@$result);
+                        		if ( $Rc != SUCCESS ) {
+                        			return( [[$lpar, @$service_lparid[0], $Rc]] );
+                        		}
+                    		}
+                	}
+		}
+ 
+		################################  
                 # id profile mtms hcp type frame
                 ################################  
                 my @d = ( $id,0,$mtms,0,"lpar",0 );
-
                 ################################
                 # Send remove command 
                 ################################
@@ -1758,8 +1759,8 @@ sub xCATdB {
         my ($model,$serial) = split /\*/,@$d[2];
         my $server   = @$d[3];
         my $fsp      = @$d[2];
- 
-        ###################################
+        
+	###################################
         # Find FSP name in ppc database
         ###################################
         my $tab = xCAT::Table->new( "ppc" );
@@ -1795,6 +1796,7 @@ sub xCATdB {
             }
             $parent = $ent->{parent};
         }
+
         my $values = join( ",",
                 "lpar",
                 $name,
