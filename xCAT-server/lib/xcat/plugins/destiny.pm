@@ -464,7 +464,8 @@ sub getdestiny {
       next;
     }
     unless ($ref->{currstate}) { #Has a record, but not yet in a state...
-      return nextdestiny(0); #Becomes a nextdestiny...
+	# call nodeset so that on next reboot we get tftp files set right
+      return nextdestiny(0,1); #Becomes a nextdestiny...
 #      my @chain = split /,/,$ref->{chain};
 #      $ref->{currstate} = shift @chain;
 #      $chaintab->setNodeAttribs($node,{currstate=>$ref->{currstate}});
