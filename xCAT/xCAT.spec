@@ -19,6 +19,7 @@ Source4: prescripts.tar.gz
 %endif
 
 Provides: xCAT = %{version}
+Conflicts: xCATsn
 Requires: xCAT-server xCAT-client perl-DBD-SQLite
 
 %ifos linux
