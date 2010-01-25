@@ -14,6 +14,7 @@ BuildRoot: /var/tmp/%{name}-%{version}-%{release}-root
 Source1: xcat.conf
 Source2: license.tar.gz
 Provides: xCATsn = %{version}
+Conflicts: xCAT-2
 Requires: xCAT-server xCAT-client  perl-xCAT perl-XML-Parser
 
 %ifos linux
