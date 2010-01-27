@@ -145,8 +145,14 @@ ProcessType () {
 
 	case "${3}" in 
 		tmpfs,rw)
-			cp -a ${1} ${TMPFS}${2}
-			echo "cp -a ${1} ${TMPFS}${2}" >>$LOG
+            if [ ! -d ${TMPFS}${2} ]
+            then
+			    cp -a ${1} ${TMPFS}${2}
+			    echo "cp -a ${1} ${TMPFS}${2}" >>$LOG
+            else
+                cp -a ${1}* ${TMPFS}${2}
+                echo "cp -a ${1}/* ${TMPFS}${2}/" >>$LOG
+            fi
 			# the link will already be in place on the image, so nothing else to do!
 			#mount -n --bind ${TMPFS}${2} ${1}
 			;;
@@ -183,8 +189,12 @@ ProcessType () {
 			# you have to get rid of the /sysroot in the beginning 
 			# so that when the chroot happens the link is valid.	
 			LINK=`echo ${PERSISTENT}${2} | sed -e 's/^\/sysroot//'`
-			echo "ln -sf ${LINK} ${TMPFS}${2}" >>$LOG
-			ln -sf ${LINK} ${TMPFS}${2}	>>$LOG 2>&1
+
+			# whack of trailing / for persistent directories:
+			TARGET=`echo ${TMPFS}${2} |  sed -e 's/\/$//'`
+		
+			echo "ln -sf ${LINK} ${TARGET}" >>$LOG
+			ln -sf ${LINK} ${TARGET}	>>$LOG 2>&1
 			;;
 		ro)
 			# need to make sure directory exists:
