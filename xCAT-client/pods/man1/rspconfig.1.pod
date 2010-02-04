@@ -38,10 +38,6 @@ B<rspconfig> I<noderange> B<network>={[B<ip>],[B<host>],[B<gateway>],[B<netmask>
 
 B<rspconfig> I<noderange> B<textid>={B<*|textid>}
 
-B<rspconfig> I<singlenode> B<frame>={B<frame_number>}
-
-B<rspconfig> I<noderange> B<frame>={B<*>}
-
 B<rspconfig> I<noderange> B<swnet>={[B<ip>],[B<gateway>],[B<netmask>]}
 
 B<rspconfig> I<noderange> B<ntp>={[B<ntpenable>],[B<ntpserver>],[B<frequency>],[B<v3>]}
@@ -77,6 +73,10 @@ B<rspconfig> I<noderange> B<admin_passwd>={B<currentpasswd,newpasswd>}
 B<rspconfig> I<noderange> B<general_passwd>={B<currentpasswd,newpasswd>}
 
 =head2 BPA Specific:
+
+B<rspconfig> I<singlenode> B<frame>={B<frame_number>}
+
+B<rspconfig> I<noderange> B<frame>={B<*>}
 
 B<rspconfig> I<noderange> {B<network>}
 
