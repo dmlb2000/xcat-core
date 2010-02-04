@@ -1028,7 +1028,7 @@ sub format_output {
     ###########################################
     if ( exists( $opt{r} )) {
         foreach ( keys %$outhash ) {
-            $result .= "@{ $outhash->{$_}}[5]\n";
+            $result .= "@{ $outhash->{$_}}[6]\n";
         }
         send_msg( $request, 0, $result );
         return;
