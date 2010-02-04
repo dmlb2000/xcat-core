@@ -95,7 +95,6 @@ my %usage = (
            network=<*|[ip],[host],[gateway],[netmask]>|
            swnet=<[ip],[gateway],[netmask]>|
            textid=<*>|
-           frame=<*>|
            ntp=<[ntp],[ip],[frequency],[v3]>|
            HMC_passwd=[currentpasswd],[newpasswd]|
            admin_passwd=[currentpasswd],[newpasswd]|
@@ -115,6 +114,16 @@ my %usage = (
    HMC specific:
            rspconfig <noderange>  [sshcfg]
            rspconfig <noderange>  [sshcfg=<enable|disable>]",
+   BPA Specific:
+           rspconfig <singlenode> [frame=<number>]
+           rspconfig <noderange> [network]|
+           rspconfig <noderange> [network={nic,*}]|
+           rspconfig <noderange> [network={nic,[IP,][hostname,][gateway,][netmask]}]|
+           rspconfig <noderange> [network={nic,0.0.0.0}]|
+           rspconfig <noderange> [HMC_passwd={currentpasswd,newpasswd}]|
+           rspconfig <noderange> [admin_passwd={currentpasswd,newpasswd}]|
+           rspconfig <noderange> [general_passwd={currentpasswd,newpasswd}]|",
+
     "getmacs" => 
 "Usage: 
    Common:
