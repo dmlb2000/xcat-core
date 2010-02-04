@@ -123,7 +123,6 @@ my %usage = (
            rspconfig <noderange> [HMC_passwd={currentpasswd,newpasswd}]|
            rspconfig <noderange> [admin_passwd={currentpasswd,newpasswd}]|
            rspconfig <noderange> [general_passwd={currentpasswd,newpasswd}]|",
-
     "getmacs" => 
 "Usage: 
    Common:
