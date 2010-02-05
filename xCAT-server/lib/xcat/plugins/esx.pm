@@ -39,6 +39,7 @@ my $usehostnamesforvcenter;
 my %tablecfg; #to hold the tables
 my $currkey;
 my $viavcenter;
+my $viavcenterbyhyp;
 my $vmwaresdkdetect = eval {
     require VMware::VIRuntime;
     VMware::VIRuntime->import();
@@ -306,27 +307,44 @@ sub process_request {
 	foreach my $hyp (sort(keys %hyphash)){
 		#if($pid == 0){
         if ($viavcenter or (defined $tablecfg{hypervisor}->{$hyp}->[0]->{mgr} and not $tablecfg{hypervisor}->{$hyp}->[0]->{preferdirect})) {
-	    $viavcenter=1;
+	    $viavcenterbyhyp->{$hyp}=1;
             $hypready{$hyp} = 0; #This hypervisor requires a flag be set to signify vCenter sanenes before proceeding
             my $vcenter = $hyphash{$hyp}->{vcenter}->{name};
             unless ($vcenterhash{$vcenter}->{conn}) {
+	        eval { 
                 $vcenterhash{$vcenter}->{conn} =
                     Vim->new(service_url=>"https://$vcenter/sdk");
                 $vcenterhash{$vcenter}->{conn}->login(
                             user_name => $hyphash{$hyp}->{vcenter}->{username},
                             password => $hyphash{$hyp}->{vcenter}->{password}
                             );
+                };
+                if ($@) { 
+                      $vcenterhash{$vcenter}->{conn} = undef;
+                      sendmsg([1,"Unable to reach $vcenter vCenter server to manage $hyp"]);
+                      next;
+                }
             }
             $hyphash{$hyp}->{conn} = $vcenterhash{$hyphash{$hyp}->{vcenter}->{name}}->{conn};
             $hyphash{$hyp}->{vcenter}->{conn} = $vcenterhash{$hyphash{$hyp}->{vcenter}->{name}}->{conn};
-            validate_vcenter_prereqs($hyp, \&declare_ready, {
+            if (validate_vcenter_prereqs($hyp, \&declare_ready, {
                 hyp=>$hyp,
                 vcenter=>$vcenter
-                });
+                }) eq "failed") {
+                $hypready{$hyp} = -1;
+            }
         } else {
-            $hyphash{$hyp}->{conn} = Vim->new(service_url=>"https://$hyp/sdk");
-            $hyphash{$hyp}->{conn}->login(user_name=>$hyphash{$hyp}->{username},password=>$hyphash{$hyp}->{password});
-            validate_licenses($hyp);
+            eval { 
+              $hyphash{$hyp}->{conn} = Vim->new(service_url=>"https://$hyp/sdk");
+              $hyphash{$hyp}->{conn}->login(user_name=>$hyphash{$hyp}->{username},password=>$hyphash{$hyp}->{password});
+            }; 
+            if ($@) {
+	       $hyphash{$hyp}->{conn} = undef;
+	       sendmsg([1,"Unable to reach $hyp to perform operation"]);
+                $hypready{$hyp} = -1;
+	       next;
+            }
+              validate_licenses($hyp);
         }
 		#}else{
 		#	$esx_comm_pids{$pid} = 1;
@@ -341,10 +359,14 @@ sub process_request {
         foreach (keys %hypready) {
             if ($hypready{$_} == -1) {
                 push @badhypes,$_;
+		my @relevant_nodes = sort (keys %{$hyphash{$_}->{nodes}});
+		foreach (@relevant_nodes) {
+			sendmsg([1,": hypervisor unreachable"],$_);
+		}
+		delete $hyphash{$_};
             }
         }
-        sendmsg([1,"The following hypervisors failed to become ready for the operation: ".join(',',@badhypes)]);
-        return;
+        sendmsg([1,": The following hypervisors failed to become ready for the operation: ".join(',',@badhypes)]);
     } 
     do_cmd($command,@exargs);
 	foreach my $hyp (sort(keys %hyphash)){
@@ -931,7 +953,7 @@ sub generic_vm_operation { #The general form of firing per-vm requests to ESX hy
     my $hyp; 
     my $vmviews;
     my %vcviews; #views populated once per vcenter server for improved performance
-    if ($viavcenter) {
+    if ($viavcenterbyhyp->{$hyp}) {
         foreach $hyp (keys %hyphash) {
             if ($vcviews{$hyphash{$hyp}->{vcenter}->{name}}) { next; }
             $vcviews{$hyphash{$hyp}->{vcenter}->{name}} = $hyphash{$hyp}->{conn}->find_entity_views(view_type => 'VirtualMachine',properties=>$properties);
@@ -965,7 +987,7 @@ sub generic_vm_operation { #The general form of firing per-vm requests to ESX hy
         }
     }
     foreach $hyp (keys %hyphash) {
-        if ($viavcenter) { 
+        if ($viavcenterbyhyp->{$hyp}) { 
             $vmviews= $vcviews{$hyphash{$hyp}->{vcenter}->{name}}
         } else {
 		    $vmviews = $hyphash{$hyp}->{conn}->find_entity_views(view_type => 'VirtualMachine',properties=>$properties);
@@ -1162,9 +1184,18 @@ sub getcfgdatastore {
         #TODO: if multiple drives are specified, make sure to split this out
         #DONE: I believe the regex after this conditional takes care of that case already..
     }
-    $cfgdatastore =~ s/,.*$//;
-    $cfgdatastore =~ s/\/$//;
-    $cfgdatastore = "[".$dses->{$cfgdatastore}."]";
+    (my $method,my $location) = split /:\/\//,$cfgdatastore,2;
+    (my $server,my $path) = split/\//,$location,2;
+    $server =~ s/:$//; #tolerate habitual colons
+    my $servern = inet_aton($server);
+    unless ($servern) {
+        sendmsg([1,"could not resolve '$server' to an address from vm.storage/vm.cfgstore"]);
+    }
+    $server = inet_ntoa($servern);
+    my $uri = "nfs://$server/$path";
+    $cfgdatastore = "[".$dses->{$uri}."]";
+    #$cfgdatastore =~ s/,.*$//; #these two lines of code were kinda pointless
+    #$cfgdatastore =~ s/\/$//;
     return $cfgdatastore;
 }
 
@@ -1340,8 +1371,18 @@ sub create_storage_devs {
         unless (scalar @sizes) { @sizes = ($disksize); } #if we emptied the array, stick the last entry back on to allow it to specify all remaining disks
         $disksize = getUnits($disksize,'G',1024);
         $storeloc =~ s/\/$//;
+        (my $method,my $location) = split /:\/\//,$storeloc,2;
+        (my $server,my $path) = split/\//,$location,2;
+        $server =~ s/:$//; #tolerate habitual colons
+        my $servern = inet_aton($server);
+        unless ($servern) {
+            sendmsg([1,"could not resolve '$server' to an address from vm.storage"]);
+            return;
+        }
+        $server = inet_ntoa($servern);
+        my $uri = "nfs://$server/$path";
         $backingif = VirtualDiskFlatVer2BackingInfo->new(diskMode => 'persistent',
-                                                           fileName => "[".$sdmap->{$storeloc}."]");
+                                                           fileName => "[".$sdmap->{$uri}."]");
         if ($disktype eq 'ide' and $idecontrollerkey eq 1 and $unitnum eq 0) { #reserve a spot for CD
             $unitnum = 1;
         } elsif ($disktype eq 'ide' and $unitnum eq 2) { #go from current to next ide 'controller'
@@ -1393,8 +1434,13 @@ sub validate_vcenter_prereqs { #Communicate with vCenter and ensure this host is
     my $depargs = shift;
     my $vcenter = $hyphash{$hyp}->{vcenter}->{name};
     unless ($hyphash{$hyp}->{vcenter}->{conn}) {
-        $hyphash{$hyp}->{vcenter}->{conn} = Vim->new(service_url=>"https://$vcenter/sdk");
-        $hyphash{$hyp}->{vcenter}->{conn}->login(user_name=>$hyphash{$hyp}->{vcenter}->{username},password=>$hyphash{$hyp}->{vcenter}->{password});
+        eval {
+           $hyphash{$hyp}->{vcenter}->{conn} = Vim->new(service_url=>"https://$vcenter/sdk");
+           $hyphash{$hyp}->{vcenter}->{conn}->login(user_name=>$hyphash{$hyp}->{vcenter}->{username},password=>$hyphash{$hyp}->{vcenter}->{password});
+        };
+        if ($@) {
+          $hyphash{$hyp}->{vcenter}->{conn} = undef;
+        }
     }
     unless ($hyphash{$hyp}->{vcenter}->{conn}) {
         sendmsg([1,": Unable to reach vCenter server managing $hyp"]);
@@ -1450,8 +1496,15 @@ sub validate_vcenter_prereqs { #Communicate with vCenter and ensure this host is
         }
     }
     #If still in function, haven't found any likely host entries, make a new one
-    $hyphash{$hyp}->{conn} = Vim->new(service_url=>"https://$hyp/sdk"); #Direct connect to install/check licenses
-    $hyphash{$hyp}->{conn}->login(user_name=>$hyphash{$hyp}->{username},password=>$hyphash{$hyp}->{password});
+    eval {
+        $hyphash{$hyp}->{conn} = Vim->new(service_url=>"https://$hyp/sdk"); #Direct connect to install/check licenses
+    	$hyphash{$hyp}->{conn}->login(user_name=>$hyphash{$hyp}->{username},password=>$hyphash{$hyp}->{password});
+    };
+    if ($@) {
+		sendmsg([1,": Failed to communicate with $hyp"]);
+                 $hyphash{$hyp}->{conn} = undef;
+                return "failed";
+    }
     validate_licenses($hyp);
     addhosttovcenter(undef,{
         depfun => $depfun,
@@ -1729,7 +1782,14 @@ sub validate_datastore_prereqs {
             my $dsv = $hypconn->get_view(mo_ref=>$_);
             if (defined $dsv->info->{nas}) {
                 if ($dsv->info->nas->type eq 'NFS') {
-                    $hyphash{$hyp}->{datastoremap}->{"nfs://".$dsv->info->nas->remoteHost.$dsv->info->nas->remotePath}=$dsv->info->name;
+                    my $mnthost = inet_aton($dsv->info->nas->remoteHost);
+                    if ($mnthost) {
+                     $mnthost = inet_ntoa($mnthost);
+                    } else {
+                        $mnthost = $dsv->info->nas->remoteHost;
+                        sendmsg([1,"Unable to resolve VMware specified host '".$dsv->info->nas->remoteHost."' to an address, problems may occur"]);
+                    }
+                    $hyphash{$hyp}->{datastoremap}->{"nfs://".$mnthost.$dsv->info->nas->remotePath}=$dsv->info->name;
                 } #TODO: care about SMB
             } #TODO: care about VMFS
         }
@@ -1744,13 +1804,22 @@ sub validate_datastore_prereqs {
             s/\/$//; #Strip trailing slash if specified, to align to VMware semantics
             if (/:\/\//) {
                 ($method,$location) = split /:\/\//,$_,2;
+                (my $server, my $path) = split /\//,$location,2;
+                $server =~ s/:$//; #remove a : if someone put it in out of nfs mount habit
+                my $servern = inet_aton($server);
+                unless ($servern) {
+                    sendmsg([1,": Unable to resolve '$server' to an address, check vm.cfgstore/vm.storage"]);
+                    return 0;
+                }
+                $server = inet_ntoa($servern);
+                my $uri = "nfs://$server/$path";
                 unless ($method =~ /nfs/) {
                     sendmsg([1,": $method is unsupported at this time (nfs would be)"],$node);
                     return 0;
                 }
-                unless ($hyphash{$hyp}->{datastoremap}->{$_}) { #If not already there, must mount it
+                unless ($hyphash{$hyp}->{datastoremap}->{$uri}) { #If not already there, must mount it
                     $refresh_names=1;
-                    $hyphash{$hyp}->{datastoremap}->{$_}=mount_nfs_datastore($hostview,$location);
+                    $hyphash{$hyp}->{datastoremap}->{$uri}=mount_nfs_datastore($hostview,$location);
                 }
             } else {
                 sendmsg([1,": $_ not supported storage specification for ESX plugin, 'nfs://<server>/<path>' only currently supported vm.storage supported for ESX at the moment"],$node);
@@ -1765,7 +1834,14 @@ sub validate_datastore_prereqs {
                 my $dsv = $hypconn->get_view(mo_ref=>$_);
                 if (defined $dsv->info->{nas}) {
                     if ($dsv->info->nas->type eq 'NFS') {
-                        $hyphash{$hyp}->{datastoremap}->{"nfs://".$dsv->info->nas->remoteHost.$dsv->info->nas->remotePath}=$dsv->info->name;
+                        my $mnthost = inet_aton($dsv->info->nas->remoteHost);
+                        if ($mnthost) {
+                         $mnthost = inet_ntoa($mnthost);
+                        } else {
+                            $mnthost = $dsv->info->nas->remoteHost;
+                            sendmsg([1,"Unable to resolve VMware specified host '".$dsv->info->nas->remoteHost."' to an address, problems may occur"]);
+                        }
+                        $hyphash{$hyp}->{datastoremap}->{"nfs://".$mnthost.$dsv->info->nas->remotePath}=$dsv->info->name;
                     } #TODO: care about SMB
                 } #TODO: care about VMFS
             }
