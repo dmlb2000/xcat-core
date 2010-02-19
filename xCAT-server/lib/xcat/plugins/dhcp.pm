@@ -566,7 +566,7 @@ sub process_request
     }
 
    my $dhcplockfd;
-   open($dhcplockfd,"/tmp/xcat/dhcplock");
+   open($dhcplockfd,">","/tmp/xcat/dhcplock");
    flock($dhcplockfd,LOCK_EX);
    if (grep /^-n$/, @{$req->{arg}})
     {

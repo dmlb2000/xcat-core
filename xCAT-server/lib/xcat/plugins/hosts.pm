@@ -6,6 +6,7 @@ use xCAT::Table;
 use Data::Dumper;
 use File::Copy;
 use Getopt::Long;
+use Fcntl ':flock';
 
 
 my @hosts; #Hold /etc/hosts data to be written back
@@ -141,6 +142,7 @@ sub process_request {
   my $hoststab = xCAT::Table->new('hosts');
   my $sitetab = xCAT::Table->new('site');
   my $domain;
+  my $lockh;
   if ($sitetab) {
     my $dent = $sitetab->getAttribs({key=>'domain'},'value');
     if ($dent and $dent->{value}) {
@@ -159,6 +161,8 @@ sub process_request {
       my $bakname = "/etc/hosts.xcatbak";
       copy("/etc/hosts",$bakname);
     }
+    open($lockh,">","/tmp/xcat/hostsfile.lock");
+    flock($lockh,LOCK_EX);
     my $rconf;
     open($rconf,"/etc/hosts"); # Read file into memory
     if ($rconf) {
@@ -188,6 +192,7 @@ sub process_request {
     }
   }
   writeout();
+  flock($lockh,LOCK_UN);
 }
 
 
