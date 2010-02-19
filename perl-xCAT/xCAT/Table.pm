@@ -69,6 +69,7 @@ my $dbworkersocket;
 my $dbsockpath = "/tmp/xcat/dbworker.sock";
 my $exitdbthread;
 my $dbobjsforhandle;
+my $intendedpid;
 
 
 sub dbc_call {
@@ -148,6 +149,7 @@ sub init_dbworker {
         die "Error spawining database worker";
     }
     unless ($dbworkerpid) {
+        $intendedpid=$$;
         #This process is the database worker, it's job is to manage database queries to reduce required handles and to permit cross-process caching
         $SIG{CHLD} = sub { while (waitpid(-1,WNOHANG) > 0) {}}; #avoid zombies
         #TODO: how children are being born, I'm not sure, but on occasion it happens
@@ -198,6 +200,9 @@ sub init_dbworker {
             if ($@) { #this should never be reached, but leave it intact just in case
                 my $err=$@;
                 xCAT::MsgUtils->message("S","xcatd: possible BUG encountered by xCAT DB worker ".$err);
+            }
+            if ($$ != $intendedpid) { #avoid erroneous clones
+                exit 0;
             }
         }
         close($dbworkersocket);
