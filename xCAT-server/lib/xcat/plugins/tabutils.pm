@@ -129,6 +129,9 @@ sub process_request
     {
         return tabgrep($nodes, $callback);
     }
+    elsif ($command eq "tabch"){
+        return tabch($args, $callback);
+    }
     else
     {
         print "$command not implemented yet\n";
@@ -1346,4 +1349,83 @@ sub nodels
     }
 
     return 0;
+}
+
+#########
+#  tabch
+#########
+
+sub tabch {
+	my $args = shift;
+	my $callback = shift;
+	my @ARGV = @{$args};
+	my $delete = 0;
+	if ($ARGV[0] =~ /^-d$/){
+		shift @ARGV;
+		$delete = 1;
+	}
+	
+	my $target = shift @ARGV;
+	my %tables;
+	my %keyhash=();
+	my @keypairs=split(/,/,$target);
+	if ($keypairs[0] !~ /([^\.\=]+)\.([^\.\=]+)\=(.+)/) {
+		foreach (@keypairs) {
+			m/(.*)=(.*)/;
+			my $key=$1;
+			my $val=$2;
+			$keyhash{$key}=$val;
+		}
+	} else {
+		unshift(@ARGV, $target);
+	}
+
+	if($delete){
+		my @tables_to_del=@ARGV;
+		if(@tables_to_del == 0){
+			$callback->({error => ["Missing table name."],errorcode=>[1]});
+			return;
+		}
+
+		for(@tables_to_del){
+			$tables{$_} = xCAT::Table->new($_,-create=> 1,-autocommit => 0);
+			$tables{$_}->delEntries(\%keyhash);
+			$tables{$_}->commit;
+		}
+	}else{	
+		my %tableupdates;
+		for (@ARGV) {
+			my $temp;
+			my $table;
+			my $column;
+			my $value;
+			($table,$temp) = split('\.',$_,2);
+			($column,$value) = split("=",$temp,2);
+			unless ($tables{$table}) {
+				my $tab = xCAT::Table->new($table,-create => 1,-autocommit => 0);
+				if ($tab) {
+					$tables{$table}=$tab;
+				} else {
+					$callback->({error => [ "Table $table does not exist."],errorcode=>[1]});
+				}
+			}
+		$tableupdates{$table}{$column}=$value;
+			$tableupdates{$table}{$column}=$value;
+		}
+  	#commit all the changes
+  	foreach (keys %tables) {
+    	if (exists($tableupdates{$_})) {
+    		$tables{$_}->setAttribs(\%keyhash,\%{$tableupdates{$_}});
+			}
+			$tables{$_}->commit;
+		}
+
+		#commit all the changes
+		foreach (keys %tables) {
+			if (exists($tableupdates{$_})) {
+				$tables{$_}->setAttribs(\%keyhash,\%{$tableupdates{$_}});
+			}
+			$tables{$_}->commit;
+		}
+	}
 }
