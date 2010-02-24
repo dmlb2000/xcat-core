@@ -407,7 +407,16 @@ sub mknetboot
 		}
 		if($ient->{nfsdir} ne ''){	
 			$nfsdir = $ient->{nfsdir} . "/netboot/$osver/$arch/$profile";
-			
+
+                        #this code sez, "if nfsdir starts with //, then
+                        #use a absolute path, i.e. do not append xCATisms"
+                        #this is required for some statelite envs.
+                        #still open for debate.
+
+			if($ient->{nfsdir} =~ m!^//!) {
+				$nfsdir = $ient->{nfsdir};
+				$nfsdir =~ s!^/!!;
+			}
 		}
 
 		$kcmdline = 
@@ -417,8 +426,19 @@ sub mknetboot
 		}else{
 			$kcmdline .= " ";
 		}
-		$kcmdline .=
-			"XCAT=$imgsrv:$xcatdport ";
+
+                #for statelite noderes.xcatmaster should have precedence over noderes.tftpserver
+                #open for debate
+
+                $ient = $reshash->{$node}->[0]; #$restab->getNodeAttribs($node, ['xcatmaster']);
+                if ($ient and $ient->{xcatmaster})
+                {
+		    $kcmdline .= "XCAT=$ient->{xcatmaster}:$xcatdport ";
+                }
+		else {
+		    $kcmdline .= "XCAT=$imgsrv:$xcatdport ";
+		}
+
 	}
         else
         {
