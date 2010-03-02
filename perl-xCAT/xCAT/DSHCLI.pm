@@ -4043,7 +4043,8 @@ sub parse_and_run_dcp
         if (!-f $options{'File'})
         {
 
-            my $rsp->{data}->[0] = "File:$syncfile does not exist.";
+            my $rsp = ();
+            $rsp->{data}->[0] = "File:$syncfile does not exist.";
             xCAT::MsgUtils->message("E", $rsp, $::CALLBACK, 1);
             return;
         }
