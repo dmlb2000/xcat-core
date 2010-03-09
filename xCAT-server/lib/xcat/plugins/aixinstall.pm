@@ -95,6 +95,9 @@ sub preprocess_request
 
     my %sn;
 
+        # need for runcmd output
+        $::CALLBACK=$cb;
+
 	# don't want preprocess to run on service node but _xcatdest is not set??
     #if ($req->{_xcatdest}) { return [$req]; }    #exit if preprocessed
 
@@ -330,16 +333,18 @@ sub process_request
     my $msg;
     
     $::callback=$callback;
+    # need for runcmd output
+    $::CALLBACK=$callback;
 
-	# convert the hashes back to the way they were passed in
+    # convert the hashes back to the way they were passed in
     #   XML created arrays - we need to strip them out
     my $flatreq=xCAT::InstUtils->restore_request($request, $callback);
 
-	my $command  = $flatreq->{command};
+    my $command  = $flatreq->{command};
     $::args     = $flatreq->{arg};
     $::filedata = $flatreq->{stdin}->[0];
 
-	# set the data passed in by the preprocess_request routine
+    # set the data passed in by the preprocess_request routine
     my $nodehash = $flatreq->{'nodehash'};
     my $nethash = $flatreq->{'nethash'};
     my $imagehash = $flatreq->{'imagehash'};
