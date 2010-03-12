@@ -1329,6 +1329,7 @@ sub getrvidparms {
         return (1,"Server returned unexpected data");
     }
 
+    $response = $browser->request(GET $baseurl."/page/sesssion.html"); #don't care, but needed for some firmware revisions
     $response = $browser->request(GET $baseurl."/kvm/kvm/jnlp");
     my $jnlp = $response->content;
     if ($jnlp =~ /This advanced option requires the purchase and installation/) {
