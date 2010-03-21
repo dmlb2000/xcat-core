@@ -145,7 +145,7 @@ sub mknetboot
 
     if ($sitetab)
     {
-        (my $ref) = $sitetab->getAttribs({key => 'installdir'}, value);
+        (my $ref) = $sitetab->getAttribs({key => 'installdir'}, 'value');
         if ($ref and $ref->{value})
         {
             $installroot = $ref->{value};
