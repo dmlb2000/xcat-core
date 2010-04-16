@@ -29,7 +29,7 @@ UPLOADUSER=bp-sawyers
 
 OSNAME=$(uname)
 
-if [ "$OSNAME" = "AIX" ]; then
+if [ "$OSNAME" != "AIX" ]; then
 	GSA=http://pokgsa.ibm.com/projects/x/xcat/build/linux
 fi
 
