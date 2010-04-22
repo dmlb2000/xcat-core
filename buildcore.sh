@@ -56,6 +56,7 @@ XCATCORE="xcat-core"
 svn up Version
 VER=`cat Version`
 SHORTVER=`cat Version|cut -d. -f 1,2`
+SHORTSHORTVER=`cat Version|cut -d. -f 1`
 if [ "$PROMOTE" = 1 ]; then
 	CORE="xcat-core"
 	if [ "$OSNAME" = "AIX" ]; then
@@ -114,7 +115,7 @@ if ! $GREP 'At revision' $SVNUP; then		# Use to be:  $GREP perl-xCAT $SVNUP; the
 fi
 if [ "$OSNAME" = "AIX" ]; then
 	# For the 1st one we overwrite, not append
-	echo "rpm -Uvh perl-xCAT-$SHORTVER*rpm" > $DESTDIR/instxcat
+	echo "rpm -Uvh perl-xCAT-$SHORTSHORTVER*rpm" > $DESTDIR/instxcat
 fi
 
 if $GREP xCAT-client $SVNUP; then
@@ -126,7 +127,7 @@ if $GREP xCAT-client $SVNUP; then
    mv $source/SRPMS/xCAT-client-$VER*rpm $SRCDIR/
 fi
 if [ "$OSNAME" = "AIX" ]; then
-	echo "rpm -Uvh xCAT-client-$SHORTVER*rpm" >> $DESTDIR/instxcat
+	echo "rpm -Uvh xCAT-client-$SHORTSHORTVER*rpm" >> $DESTDIR/instxcat
 fi
 
 if $GREP xCAT-UI $SVNUP; then
@@ -139,7 +140,7 @@ if $GREP xCAT-UI $SVNUP; then
 fi
 # Do not automatically install xCAT-UI on AIX
 #if [ "$OSNAME" = "AIX" ]; then
-#	echo "rpm -Uvh xCAT-UI-$SHORTVER*rpm" >> $DESTDIR/instxcat
+#	echo "rpm -Uvh xCAT-UI-$SHORTSHORTVER*rpm" >> $DESTDIR/instxcat
 #fi
 
 if $GREP xCAT-IBMhpc $SVNUP; then
@@ -147,12 +148,12 @@ if $GREP xCAT-IBMhpc $SVNUP; then
    rm -f $DESTDIR/xCAT-IBMhpc*rpm
    rm -f $SRCDIR/xCAT-IBMhpc*rpm
    ./makehpcrpm
-   mv $source/RPMS/noarch/xCAT-IBMhpc-$VER*rpm $DESTDIR
+   mv $source/RPMS/$NOARCH/xCAT-IBMhpc-$VER*rpm $DESTDIR
    mv $source/SRPMS/xCAT-IBMhpc-$VER*rpm $SRCDIR
 fi
 # Do not automatically install xCAT-IBMhpc on AIX
 #if [ "$OSNAME" = "AIX" ]; then
-#	echo "rpm -Uvh xCAT-IBMhpc-$SHORTVER*rpm" >> $DESTDIR/instxcat
+#	echo "rpm -Uvh xCAT-IBMhpc-$SHORTSHORTVER*rpm" >> $DESTDIR/instxcat
 #fi
 
 if $GREP xCAT-server $SVNUP; then
@@ -164,7 +165,7 @@ if $GREP xCAT-server $SVNUP; then
    mv $source/SRPMS/xCAT-server-$VER*rpm $SRCDIR
 fi
 if [ "$OSNAME" = "AIX" ]; then
-	echo "rpm -Uvh xCAT-server-$SHORTVER*rpm" >> $DESTDIR/instxcat
+	echo "rpm -Uvh xCAT-server-$SHORTSHORTVER*rpm" >> $DESTDIR/instxcat
 fi
 
 if $GREP xCAT-rmc $SVNUP; then
@@ -193,8 +194,8 @@ fi
 
 if $GREP -E '^[UAD] +xCATsn/' $SVNUP; then
    UPLOAD=1
-   rm -f $DESTDIR/xCATsn-$SHORTVER*rpm
-   rm -f $SRCDIR/xCATsn-$SHORTVER*rpm
+   rm -f $DESTDIR/xCATsn-*rpm
+   rm -f $SRCDIR/xCATsn-*rpm
 	if [ "$OSNAME" = "AIX" ]; then
 		./makexcatsnrpm
 		mv $source/RPMS/*/xCATsn-$VER*rpm $DESTDIR
@@ -214,8 +215,8 @@ fi
 
 if $GREP -E '^[UAD] +xCAT/' $SVNUP; then
    UPLOAD=1
-   rm -f $DESTDIR/xCAT-$SHORTVER*rpm
-   rm -f $SRCDIR/xCAT-$SHORTVER*rpm
+   rm -f $DESTDIR/xCAT-$SHORTSHORTVER*rpm
+   rm -f $SRCDIR/xCAT-$SHORTSHORTVER*rpm
 	if [ "$OSNAME" = "AIX" ]; then
 	   ./makexcatrpm
 	   mv $source/RPMS/*/xCAT-$VER*rpm $DESTDIR
@@ -234,8 +235,8 @@ if $GREP -E '^[UAD] +xCAT/' $SVNUP; then
 fi
 
 if [ "$OSNAME" = "AIX" ]; then
-	echo "rpm -Uvh xCAT-$SHORTVER*rpm" >> $DESTDIR/instxcat
-	echo "rpm -Uvh xCAT-rmc-$SHORTVER*rpm" >> $DESTDIR/instxcat
+	echo "rpm -Uvh xCAT-$SHORTSHORTVER*rpm" >> $DESTDIR/instxcat
+	echo "rpm -Uvh xCAT-rmc-$SHORTSHORTVER*rpm" >> $DESTDIR/instxcat
 	# add the service node bundle files 
 	cp xCATaixSN.bnd xCATaixSN2.bnd xCATaixSSH.bnd xCATaixSSL.bnd $DESTDIR/
 fi
@@ -294,6 +295,7 @@ chgrp -R xcat $DESTDIR
 chmod -R g+w $DESTDIR
 chgrp -R xcat $SRCDIR
 chmod -R g+w $SRCDIR
+
 fi		# end of very long if-not-promote
 
 
