@@ -67,6 +67,10 @@ sub init_plugin
     {
         return 0;
     }
+    my @bypassservicesetup = xCAT::Utils->get_site_attribute("bypassservicesetup");
+    if ($bypassservicesetup[0] and $bypassservicesetup[0] eq '1') {
+        return 0;
+    }
 
     my $rc = 0;
 
