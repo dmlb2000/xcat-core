@@ -15,6 +15,7 @@ use lib "$::XCATROOT/lib/perl";
 use Getopt::Long;
 use xCAT::MsgUtils;
 use xCAT::Utils;
+use strict;
 
 #-----------------------------------------------------------------------------
 
@@ -46,6 +47,10 @@ foreach my $table (@output)
     if ($::RUNCMD_RC != 0)
     {    # error
         xCAT::MsgUtils->message("E", "Error running $cmd, @errout\n");
+    } else {
+      if ($::DUMPVERBOSE) {
+        xCAT::MsgUtils->message("I", "Dumping $table\n");
+      }
     }
 
 }
@@ -63,7 +68,8 @@ exit $rc;
 sub parse_args
 {
     my $msg;
-    my $usagemsg;
+    my  $usagemsg =
+          " dumpxCATdb -h \n dumpxCATdb -v \n dumpxCATdb [-V] <-p> [path to dump directory]\n";
     Getopt::Long::Configure("posix_default");
     Getopt::Long::Configure("no_gnu_compat");
     Getopt::Long::Configure("bundling");
@@ -71,20 +77,17 @@ sub parse_args
         !GetOptions(
             'p|path=s'  => \$::PATH,
             'h|help'    => \$::HELP,
+            'V|verbose'    => \$::DUMPVERBOSE,
             'v|version' => \$::VERSION
 
         )
       )
     {
-        $usagemsg =
-          " dumpxCATdb -h \n dumpxCATdb -v \n dumpxCATdb [-p] [path to dump directory]\n";
         xCAT::MsgUtils->message("E", $usagemsg);
         exit 1;
     }
     if ($::HELP)
     {
-        $usagemsg =
-          " dumpxCATdb -h \n dumpxCATdb -v \n dumpxCATdb [-p] [path to dump directory]\n";
         xCAT::MsgUtils->message("I", $usagemsg);
         exit 0;
     }
