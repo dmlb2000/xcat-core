@@ -107,7 +107,7 @@ litefile => {
 		image => "The name of the image that will use these files, as specified in the osimage table. 'ALL' means use it for all images.",
 		file => "The full pathname of the file. e.g: /etc/hosts.  If the path is a directory, then it should be terminated with a '/'. ",
 		options => "Options for the file:\n\n".
-			" blank, tmpfs, or ALL - the file is readwrite and will be placed in tmpfs on the booted node.  When searching for the file, the first one to be found in the litetree hierarchy will be used.  When the node is rebooted, this file will be reinitialized.\n\n".
+			" blank, tmpfs, or ALL - the file is readwrite and will be placed in tmpfs on the booted node. 'All' implies tmpfs,rw.  When searching for the file, the first one to be found in the litetree hierarchy will be used.  When the node is rebooted, this file will be reinitialized.\n\n".
                         " bind instead of using symbolic links, 'mount --bind' is used to mount the file to the root image, and the permission for the file will be the same as the original.\n\n".
                         " bind,persistent - the file will be persistent across reboots, and the file will be mounted with '--bind' option. \n\n".
 			" con - The contents of the pathname are concatenated to the contents of the existing file.  For this directive the searching in the litetree hierarchy does not stop when the first match is found.  Con is similar to tmpfs, but all files found in the hierarchy will be concatenated to the file when found.\n\n".
@@ -652,8 +652,12 @@ site => {
   # Do not put description text past column 88, so it displays well in a 100 char wide window.
   # ----------------------------------------------------------------------------------|
   key => "Attribute Name:  Description\n\n".
+   " auditskipcmds: List of commands that will not be written to the auditlog table.\n".
+   "                ALL - means all cmds will be skipped. If attribute null, all\n".
+   "                commands will be written.\n".
+   "                For example: tabdump,nodels,lsdef will not log those cmds.\n".
+   "                ALL will not log any cmds.\n\n".
    " blademaxp:  The maximum number of processes for blade hardware control.\n\n".
-   " bypassservicesetup:\tSet to 1 to have xCAT skip attempts to set up other services on startup including FTP\n\n".
    " consoleondemand:  When set to 'yes', conserver connects and creates the console\n".
    "                   output only when the user opens the console. Default is no on\n".
    "                   Linux, yes on AIX.\n\n".
@@ -700,8 +704,10 @@ site => {
    " ppctimeout:  The timeout, in milliseconds, to use when communicating with PPC hw.\n\n".
    " pruneservices:  Whether to enable service pruning when noderm is run (i.e.\n".
    "                 removing DHCP entries when noderm is executed)\n\n".
-   " sharedtftp:  Set to no or 0 if xCAT should not assume /tftpboot is mounted on all\n".
-   "              service nodes. Default is 1/yes.\n\n".
+   " sharedtftp:  Set to 0 or no, if xCAT should not assume the directory\n".
+   "              in tftpdir is mounted on all on Service Nodes. Default is 1/yes.\n". 
+   "              If value is set to a hostname, the directory in tftpdir\n".
+   "              will be mounted from that hostname on the SN\n\n". 
    " timezone:  (e.g. America/New_York)\n\n".
    " tftpdir:  tftp directory path. Default is /tftpdir\n\n".
    " useSSHonAIX:  (yes/1 or no/0). If yes, ssh/scp will be setup and used. If no,\n".
