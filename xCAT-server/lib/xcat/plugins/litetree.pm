@@ -69,16 +69,12 @@ sub process_request {
 	# if request comes from node post script .awk file.
 	}elsif($request->{'_xcat_clienthost'}){
 		my @nodenames = noderange($request->{'_xcat_clienthost'}->[0].",".$request->{'_xcat_clientfqdn'}->[0]);
-		$noderange = \@nodenames;
+        if (@nodenames) {
+            $noderange = \@nodenames;
+            $request->{node} = $noderange;
+        }
 	}else{
 		$callback->({error=>["Well Kemosabi, I can't figure out who you are."],errorcode=>[1]});
-		return;
-	}
-
-	if(!$noderange){
-		my $usage_string="Missing Noderange\n";
-		$callback->({error=>[$usage_string],errorcode=>[1]});
-		$request = {};
 		return;
 	}
 
