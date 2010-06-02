@@ -184,7 +184,7 @@ Verbose mode.
 
 To setup sinv.template (name optional) for input to the B<sinv> command , enter:
 
-B<xdsh> I<node1,node2 "rpm -qa | grep xCAT " | xdshcoll  E<gt> /tmp/sinv.template>
+B<xdsh> I<node1,node2 "rpm -qa | grep ssh " | xdshcoll  E<gt> /tmp/sinv.template>
 
 Note: when setting up the template the output of xdsh must be piped
 	  to xdshcoll, sinv processing depends on it.
@@ -205,7 +205,7 @@ on the nodegroup, B<testnodes> ,possibly generating up to two
 new templates, and removing all generated templates in the end, and writing
 output report to /tmp/sinv.output, enter:
 
-B<sinv> I< -c "xdsh testnodes rpm -qa | grep xCAT" -p /tmp/sinv.template -t 2 -r -o /tmp/sinv.output>
+B<sinv> I< -c "xdsh testnodes rpm -qa | grep ssh" -p /tmp/sinv.template -t 2 -r -o /tmp/sinv.output>
 
 Note: do not add the pipe to xdshcoll on the -c flag, it is automatically
 added by the sinv routine.
