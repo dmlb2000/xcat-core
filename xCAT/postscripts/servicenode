@@ -199,7 +199,7 @@ sub setupAIXsn
 	&getcreds;
 
 	# Add the xcatd subsystem to the AIX
-	my $mkssys_cmd = 'mkssys -p /opt/xcat/sbin/xcatd -s xcatd -u 0 -S -n 15 -f 15 -a "-f"';
+	my $mkssys_cmd = "mkssys -p $::XCATROOT/sbin/xcatd -s xcatd -u 0 -S -n 15 -f 15 -a '-f' ";
 	if (&runcmd($mkssys_cmd) != 0) {
 		$msg = "$::sdate servicenode: Could not create subsystem for xcatd. It maybe already have been added.\n";
 		`logger -t xcat $msg`;
@@ -208,14 +208,14 @@ sub setupAIXsn
 	# start xcatd
 	if (&runcmd("/opt/xcat/sbin/restartxcatd") != 0) {
 		$msg = "$::sdate servicenode: Could not start xcatd.\n";
-        	`logger -t xcat $msg`;
-    	}
+       	`logger -t xcat $msg`;
+    }
 
 	# add xcatd to /etc/inittab???
-	my $mkitab_cmd = 'mkitab "xcatd:2:once:/opt/xcat/sbin/restartxcatd > /dev/console 2>&1"';
+	my $mkitab_cmd = qq~/usr/sbin/mkitab "xcatd:2:once:$::XCATROOT/sbin/restartxcatd > /dev/console 2>&1"~;
 
 	if (&runcmd($mkitab_cmd) != 0) {
-		# error might just mean that the entry is already there!
+	# error might just mean that the entry is already there!
 
 	#	$msg = "$::sdate servicenode: Could not add xcatd to /etc/inittab.\n";
 	#    `logger -t xcat $msg`;
@@ -314,7 +314,7 @@ sub getcreds
 		`logger -t xcat $msg`;
 	}
 
-	my $response=&getresponse("xcat_server_cred");
+	$response=&getresponse("xcat_server_cred");
 	if (defined ($response) ) {
 		my $fd;
 		my $filename = "/etc/xcat/cert/server-cred.pem";
@@ -332,7 +332,7 @@ sub getcreds
         `logger -t xcat $msg`;
     }
 
-	my $response=&getresponse("xcat_cfgloc");
+	$response=&getresponse("xcat_cfgloc");
 	if (defined ($response) ) {
 		# need to change entry to use the name of the server as
 		#       know by this node
