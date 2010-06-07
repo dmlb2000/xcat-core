@@ -258,6 +258,7 @@ sub preprocess_updatenode
                 $::RERUNPS = $ARGV[0];
                 $ARGV[0] = "";
             }
+
         }
     }
     else
@@ -1249,7 +1250,7 @@ sub doAIXcopy
     # want list of remote service nodes - to copy files to
 
     # get the ip of the NIM primary (normally the management node)
-    my $ip = inet_ntoa(inet_aton($nimprime));
+	my $ip = inet_ntoa(inet_aton($nimprime));
     chomp $ip;
     my ($p1, $p2, $p3, $p4) = split /\./, $ip;
 
@@ -1257,10 +1258,10 @@ sub doAIXcopy
     foreach my $snkey (keys %$sn)
     {
 
-        my $ip = inet_ntoa(inet_aton($snkey));
+		my $ip = inet_ntoa(inet_aton($snkey));
         chomp $ip;
-        my ($s1, $s2, $s3, $s4) = split /\./, $ip;
-        if (($s1 == $p1) && ($s2 == $p2) && ($s3 == $p3) && ($s4 == $p4))
+		my ($s1, $s2, $s3, $s4) = split /\./, $ip;
+		if (($s1 == $p1) && ($s2 == $p2) && ($s3 == $p3) && ($s4 == $p4))
         {
             next;
         }
@@ -1851,9 +1852,33 @@ sub updateAIXsoftware
 			# $serv is the name of the nodes server as known by the node
 
 		  	if (scalar(@pkglist)) {
-
             	foreach my $serv (@servers)
             	{
+					# make sure the permissions are correct in the lpp_source
+					my $chmcmd = qq~/bin/chmod -R +r $pkgdir~;
+
+					# if server is me then just do chmod
+					if (xCAT::InstUtils->is_me($serv)) {
+						my @result = xCAT::Utils->runcmd("$chmcmd", -1);
+						if ($::RUNCMD_RC != 0)
+						{
+							my $rsp;
+							push @{$rsp->{data}}, "Could not set permissions for $pkgdir.\n";
+							xCAT::MsgUtils->message("E", $rsp, $callback);
+							return 1;
+						}
+
+					} else {  # if server is remote then use xdsh
+						my $output = xCAT::Utils->runxcmd({command => ["xdsh"], node => [$serv], arg => [$chmcmd]}, $subreq, -1, 1);
+						if ($::RUNCMD_RC != 0)
+						{
+							my $rsp;
+							push @{$rsp->{data}}, "Could not set permissions for $pkgdir.\n";
+							xCAT::MsgUtils->message("E", $rsp, $callback);
+						 	return 1;
+						}
+					}
+
                 	# mount source dir to node
                 	my $mcmd   = qq~mkdir -m 644 -p /xcatmnt; mount $serv:$pkgdir /xcatmnt~;
 
