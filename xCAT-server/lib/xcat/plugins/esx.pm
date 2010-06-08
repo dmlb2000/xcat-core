@@ -71,6 +71,8 @@ sub handled_commands{
 		rmigrate => 'nodehm:power,mgt',
 		mkvm => 'nodehm:mgt',
 		rmvm => 'nodehm:mgt',
+		rinv => 'nodehm:mgt',
+                chvm => 'nodehm:mgt',
 		rmhypervisor => 'hypervisor:type',
 		#lsvm => 'nodehm:mgt', not really supported yet
 	};
@@ -414,14 +416,266 @@ sub do_cmd {
         generic_vm_operation(['config.name','runtime.powerState','runtime.host'],\&rmvm,@exargs);
     } elsif ($command eq 'rsetboot') {
         generic_vm_operation(['config.name','runtime.host'],\&setboot,@exargs);
+    } elsif ($command eq 'rinv') {
+        generic_vm_operation(['config.name','config','runtime.host'],\&inv,@exargs);
     } elsif ($command eq 'rmhypervisor') {
         generic_hyp_operation(\&rmhypervisor,@exargs);
     } elsif ($command eq 'mkvm') {
         generic_hyp_operation(\&mkvms,@exargs);
+    } elsif ($command eq 'chvm') {
+        generic_vm_operation(['config.name','config','runtime.host'],\&chvm,@exargs);
+        #generic_hyp_operation(\&chvm,@exargs);
     } elsif ($command eq 'rmigrate') { #Technically, on a host view, but vcenter path is 'weirder'
         generic_hyp_operation(\&migrate,@exargs);
     }
     wait_for_tasks();
+}
+
+#inventory request for esx
+sub inv {
+  my %args = @_;
+  my $node = $args{node};
+  my $hyp = $args{hyp};
+  if (not defined $args{vmview}) { #attempt one refresh
+    $args{vmview} = $hyphash{$hyp}->{conn}->find_entity_view(view_type => 'VirtualMachine',properties=>['config.name','runtime.powerState'],filter=>{name=>$node});
+  }
+  if (not defined $args{vmview}) { 
+    sendmsg([1,"VM does not appear to exist"],$node);
+    return;
+  }
+  my $vmview = $args{vmview};
+  my $uuid = $vmview->config->uuid;
+  sendmsg("$node:  UUID/GUID:  $uuid");
+  my $cpuCount = $vmview->config->hardware->numCPU;
+  sendmsg("$node:  CPUs:  $cpuCount");
+  my $memory = $vmview->config->hardware->memoryMB;
+  sendmsg("$node:  Memory:  $memory MB");
+  my $devices = $vmview->config->hardware->device;
+  my $label;
+  my $size;
+  my $fileName;
+  my $device;
+  foreach $device (@$devices) {
+    $label = $device->deviceInfo->label;
+
+    if($label =~ /^Hard disk/) {
+      $size = $device->capacityInKB / 1024;
+      $fileName = $device->backing->fileName;
+
+      sendmsg("$node:  $label:  $size MB @ $fileName");
+    }
+  }
+}
+
+
+#changes the memory, number of cpus and device size
+#can also add and remove disks
+sub chvm {
+	my %args = @_;
+	my $node = $args{node};
+	my $hyp = $args{hyp};
+	if (not defined $args{vmview}) { #attempt one refresh
+		$args{vmview} = $hyphash{$hyp}->{conn}->find_entity_view(view_type => 'VirtualMachine',
+				properties=>['config.name','runtime.powerState'],
+				filter=>{name=>$node});
+	}
+	if (not defined $args{vmview}) {
+		sendmsg([1,"VM does not appear to exist"],$node);
+		return;
+	}
+	@ARGV= @{$args{exargs}};
+	my @deregister;
+	my @purge;
+	my @add;
+	my %resize;
+	my $cpuCount;
+	my $memory;
+	my $vmview = $args{vmview};
+
+	require Getopt::Long;
+	$SIG{__WARN__} = sub {
+		sendmsg([1,"Could not parse options, ".shift()]);
+	};
+	my $rc = GetOptions(
+		"d=s"       => \@deregister,
+		"p=s"       => \@purge,
+		"a=s"       => \@add,
+		"resize=s%" => \%resize,
+		"cpus=i"    => \$cpuCount,
+		"mem=s"     => \$memory
+	);
+	$SIG{__WARN__} = 'DEFAULT';
+
+	if(@ARGV) {
+		sendmsg("Invalid arguments:  @ARGV");
+		return;
+	}
+
+	if(!$rc) {
+		return;
+	}
+
+	#use Data::Dumper;
+	#sendmsg("dereg = ".Dumper(\@deregister));
+	#sendmsg("purge = ".Dumper(\@purge));
+	#sendmsg("add = ".Dumper(\@add));
+	#sendmsg("resize = ".Dumper(\%resize));
+	#sendmsg("cpus = $cpuCount");
+	#sendmsg("mem = ".getUnits($memory,"K",1024));
+
+
+	my %conargs;
+	if($cpuCount) {
+		$conargs{numCPUs} = $cpuCount;
+	}
+
+	if($memory) {
+		$conargs{memoryMB} = getUnits($memory, "M", 1048576);
+	}
+
+	my $disk;
+	my $devices = $vmview->config->hardware->device;
+	my $label;
+	my $device;
+	my $cmdLabel;
+	my $newSize;
+	my @devChanges;
+
+	if(@deregister) {
+		for $disk (@deregister) {
+			$device = getDiskByLabel($disk, $devices);
+			unless($device) {
+				sendmsg("$node:  Disk:  $disk does not exist");
+				return;
+			}
+			#sendmsg(Dumper($device));
+			push @devChanges, VirtualDeviceConfigSpec->new(
+						device => $device,
+						operation =>  VirtualDeviceConfigSpecOperation->new('remove'));
+
+		}
+	}
+
+	if(@purge) {
+		for $disk (@purge) {
+			$device = getDiskByLabel($disk, $devices);
+			unless($device) {
+				sendmsg("$node:  Disk:  $disk does not exist");
+				return;
+			}
+			#sendmsg(Dumper($device));
+			push @devChanges, VirtualDeviceConfigSpec->new(
+						device => $device,
+						operation =>  VirtualDeviceConfigSpecOperation->new('remove'),
+						fileOperation =>  VirtualDeviceConfigSpecFileOperation->new('destroy'));
+
+		}
+     
+	}
+  
+	if(@add) {
+		my $addSizes = join(',',@add);
+		my $scsiCont;
+		my $scsiUnit;
+		my $ideCont;
+		my $ideUnit;
+		my $label;
+		foreach $device (@$devices) {
+			$label = $device->deviceInfo->label;
+			if($label =~ /^SCSI controller/) {
+				$scsiCont = $device;
+			}
+			if($label =~ /^IDE/) {
+				$ideCont = $device;
+			}
+		}
+		if($scsiCont) {
+			$scsiUnit = getHighestUnit($scsiCont->{key},$devices);
+		}
+		if($ideCont) {
+			$ideUnit = getHighestUnit($ideCont->{key},$devices);
+		}
+		unless ($hyphash{$hyp}->{datastoremap}) { validate_datastore_prereqs([],$hyp); }
+    		push @devChanges, create_storage_devs($node,$hyphash{$hyp}->{datastoremap},$addSizes,$scsiCont,$scsiUnit,$ideCont,$ideUnit);
+	}
+
+	if(%resize) {
+		while( my ($key, $value) = each(%resize) ) {
+			my @drives = split(/,/, $key);
+			for my $device ( @drives ) {
+				my $disk = $device;
+				$device = getDiskByLabel($disk, $devices);
+				unless($device) {
+					sendmsg("$node:  Disk:  $disk does not exist");
+					return;
+				}
+				$value = getUnits($value, "G", 1024);
+				my $newDevice = VirtualDisk->new(deviceInfo => $device->deviceInfo,
+                        			key => $device->key,
+						controllerKey => $device->controllerKey,
+						unitNumber => $device->unitNumber,
+						deviceInfo => $device->deviceInfo,
+						backing => $device->backing,
+                        			capacityInKB => $value); 
+				push @devChanges, VirtualDeviceConfigSpec->new(
+						device => $newDevice,
+						operation =>  VirtualDeviceConfigSpecOperation->new('edit'));
+			}
+		}
+
+	}
+	if(@devChanges) {
+		$conargs{deviceChange} = \@devChanges;
+	}
+
+	my $reconfigspec = VirtualMachineConfigSpec->new(%conargs);
+	
+	#sendmsg("reconfigspec = ".Dumper($reconfigspec));
+	my $task = $vmview->ReconfigVM_Task(spec=>$reconfigspec);
+	$running_tasks{$task}->{task} = $task;
+	$running_tasks{$task}->{callback} = \&generic_task_callback;
+	$running_tasks{$task}->{hyp} = $hyp;
+	$running_tasks{$task}->{data} = { node => $node, successtext => "node successfully changed" };
+
+}
+
+sub getHighestUnit {
+  my $contKey = shift;
+  my $devices = shift;
+  my $highestUnit = 0;
+  for my $device (@$devices) {
+    if(($device->{controllerKey} eq $contKey) && ($device->{unitNumber} >= $highestUnit)) {
+      $highestUnit = $device->{unitNumber}+1;
+    }
+  }
+  return $highestUnit;
+}
+
+#given a device list from a vm and a label for a hard disk, returns the device object
+sub getDiskByLabel {
+  my $cmdLabel = shift;
+  my $devices = shift;
+  my $device;
+  my $label;
+
+  $cmdLabel = commandLabel($cmdLabel);
+  foreach $device (@$devices) {
+    $label = $device->deviceInfo->label;
+
+    if($cmdLabel eq $label) {
+      return $device;
+    }
+  }
+  return undef;
+}
+
+#takes a label for a hard disk and prepends "Hard disk " if it's not there already
+sub commandLabel {
+  my $label = shift;
+  if($label =~ /^Hard disk/) {
+    return $label;
+  }
+  return "Hard disk ".$label;
 }
 
 #this function will check pending task status
@@ -1464,6 +1718,10 @@ sub create_storage_devs {
     my $sdmap = shift;
     my $sizes = shift;
     my @sizes = split /[,:]/, $sizes;
+    my $existingScsiCont = shift;
+    my $scsiUnit = shift;
+    my $existingIdeCont = shift;
+    my $ideUnit = shift;
     my $scsicontrollerkey=0;
     my $idecontrollerkey=200; #IDE 'controllers' exist at 200 and 201 invariably, with no flexibility?
                               #Cannot find documentation that declares this absolute, but attempts to do otherwise
@@ -1473,9 +1731,19 @@ sub create_storage_devs {
     my @devs;
     my $havescsidevs =0;
     my $disktype = 'ide';
-    my $unitnum=0; #Going to make IDE controllers for now, aiming for
-                   #lowest common denominator guest driver for 
-                   #changing hypervisor technology
+    my $ideunitnum=0; 
+    my $scsiunitnum=0;
+    my $havescsicontroller=0;
+    if (defined $existingScsiCont) { 
+    $havescsicontroller=1;
+	$scsicontrollerkey = $existingScsiCont->{key};
+	$scsiunitnum = $scsiUnit;
+    }
+    if (defined $existingIdeCont) { 
+	$idecontrollerkey = $existingIdeCont->{key};
+	$ideunitnum = $ideUnit;
+    }
+    my $unitnum;
     my %disktocont;
     my $dev;
     my @storelocs = split /,/,$tablecfg{vm}->{$node}->[0]->{storage};
@@ -1504,11 +1772,11 @@ sub create_storage_devs {
         my $uri = "nfs://$server/$path";
         $backingif = VirtualDiskFlatVer2BackingInfo->new(diskMode => 'persistent',
                                                            fileName => "[".$sdmap->{$uri}."]");
-        if ($disktype eq 'ide' and $idecontrollerkey eq 1 and $unitnum eq 0) { #reserve a spot for CD
-            $unitnum = 1;
-        } elsif ($disktype eq 'ide' and $unitnum eq 2) { #go from current to next ide 'controller'
+        if ($disktype eq 'ide' and $idecontrollerkey eq 1 and $ideunitnum eq 0) { #reserve a spot for CD
+            $ideunitnum = 1;
+        } elsif ($disktype eq 'ide' and $ideunitnum eq 2) { #go from current to next ide 'controller'
             $idecontrollerkey++;
-            $unitnum=0;
+            $ideunitnum=0;
         }
         unless ($disktype eq 'ide') {
             push @{$disktocont{$scsicontrollerkey}},$currkey;
@@ -1516,15 +1784,17 @@ sub create_storage_devs {
         my $controllerkey;
         if ($disktype eq 'ide') {
             $controllerkey = $idecontrollerkey;
+	    $unitnum = $ideunitnum++;
         } else {
             $controllerkey = $scsicontrollerkey;
+	    $unitnum = $scsiunitnum++;
             $havescsidevs=1;
         }
 
         $dev =VirtualDisk->new(backing=>$backingif,
                         controllerKey => $controllerkey,
                         key => $currkey++,
-                        unitNumber => $unitnum++,
+                        unitNumber => $unitnum,
                         capacityInKB => $disksize); 
         push @devs,VirtualDeviceConfigSpec->new(device => $dev,
                                                 fileOperation => VirtualDeviceConfigSpecFileOperation->new('create'),
@@ -1532,17 +1802,17 @@ sub create_storage_devs {
     }
 
     #It *seems* that IDE controllers are not subject to require creation, so we skip it
-    if ($havescsidevs) { #need controllers to attach the disks to
-        foreach(0..$scsicontrollerkey) {
-            $dev=VirtualLsiLogicController->new(key => $_,
-                                                device => \@{$disktocont{$_}},
-                                                sharedBus => VirtualSCSISharing->new('noSharing'),
-                                                busNumber => $_);
-            push @devs,VirtualDeviceConfigSpec->new(device => $dev,
-                                                operation =>  VirtualDeviceConfigSpecOperation->new('add'));
-                                                 
-        }
-    }
+   if ($havescsidevs and not $havescsicontroller) { #need controllers to attach the disks to
+       foreach(0..$scsicontrollerkey) {
+           $dev=VirtualLsiLogicController->new(key => $_,
+                                               device => \@{$disktocont{$_}},
+                                               sharedBus => VirtualSCSISharing->new('noSharing'),
+                                               busNumber => $_);
+           push @devs,VirtualDeviceConfigSpec->new(device => $dev,
+                                               operation =>  VirtualDeviceConfigSpecOperation->new('add'));
+                                                
+       }
+   }
     return  @devs;
 #    my $ctlr = VirtualIDEController->new(
 }
