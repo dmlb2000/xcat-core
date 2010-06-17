@@ -73,6 +73,7 @@ sub handled_commands{
 		rmvm => 'nodehm:mgt',
 		rinv => 'nodehm:mgt',
                 chvm => 'nodehm:mgt',
+        lsvm => 'hypervisor:type',
 		rmhypervisor => 'hypervisor:type',
 		#lsvm => 'nodehm:mgt', not really supported yet
 	};
@@ -135,7 +136,7 @@ sub preprocess_request {
 
 	my $vmtabhash = $vmtab->getNodesAttribs($noderange,['host']);
 	foreach my $node (@$noderange){
-        if ($command eq "rmhypervisor") {
+        if ($command eq "rmhypervisor" or $command eq 'lsvm') {
             $hyp_hash{$node}{nodes} = [$node];
         } else {
         my $ent = $vmtabhash->{$node}->[0];
@@ -158,9 +159,18 @@ sub preprocess_request {
 	# build an individual request for each service node
 	my $service  = "xcat";
 	my @hyps=keys(%hyp_hash);
-    if ($command eq 'rmigrate') {
-        my $dsthyp = $extraargs->[0];
-        push @hyps,$dsthyp;
+    if ($command eq 'rmigrate' and (scalar @{$extraargs} >= 1)) {
+        @ARGV=@{$extraargs};
+        my $offline;
+        my $junk;
+        GetOptions(
+            "f" => \$offline,
+            "s=s" => \$junk #wo don't care about it, but suck up nfs:// targets so they don't get added
+            );
+        my $dsthyp = $ARGV[0];
+        if ($dsthyp) {
+            push @hyps,$dsthyp;
+        }
     }
     #TODO: per hypervisor table password lookup
 	my $sn = xCAT::Utils->get_ServiceNode(\@hyps, $service, "MN");
@@ -283,6 +293,14 @@ sub process_request {
         }
 		my $ent;
 		for (my $i=0; $i<@nodes; $i++){
+			if ($command eq 'rmigrate' and grep /-f/, @exargs) { #offline migration, 
+				$hyphash{$hyp}->{offline} = 1; #if it is migrate and it has nodes, it is a source hypervisor apt to be offline
+                                               #this will hint to relevant code to operate under the assumption of a
+                                               #downed hypervisor source
+                                               #note this will make dangerous assumptions, it will make a very minimal attempt
+                                               #to operate normally, but really should only be called if the source is down and
+                                               #fenced (i.e. storage, network, or turned off and stateless
+			}
 			my $node = $nodes[$i];
 			#my $nodeid = $ids[$i];
 			$hyphash{$hyp}->{nodes}->{$node}=1;# $nodeid;
@@ -361,23 +379,26 @@ sub process_request {
         wait_for_tasks();
         sleep (1); #We'll check back in every second.  Unfortunately, we have to poll since we are in web service land
     }
+    my @badhypes;
     if (grep { $_ == -1 } values %hypready) {
-        my @badhypes;
         foreach (keys %hypready) {
             if ($hypready{$_} == -1) {
                 push @badhypes,$_;
-		my @relevant_nodes = sort (keys %{$hyphash{$_}->{nodes}});
-		foreach (@relevant_nodes) {
-			sendmsg([1,": hypervisor unreachable"],$_);
-		}
-		delete $hyphash{$_};
+                my @relevant_nodes = sort (keys %{$hyphash{$_}->{nodes}});
+                foreach (@relevant_nodes) {
+                    sendmsg([1,": hypervisor unreachable"],$_);
+                }
+                delete $hyphash{$_};
             }
         }
-        sendmsg([1,": The following hypervisors failed to become ready for the operation: ".join(',',@badhypes)]);
+        if (@badhypes) { 
+            sendmsg([1,": The following hypervisors failed to become ready for the operation: ".join(',',@badhypes)]);
+        }
     } 
     do_cmd($command,@exargs);
-	foreach my $hyp (sort(keys %hyphash)){
-            $hyphash{$hyp}->{conn}->logout();
+    foreach (@badhypes) { delete $hyphash{$_}; }
+    foreach my $hyp (sort(keys %hyphash)){
+      $hyphash{$hyp}->{conn}->logout();
     }
 }
 
@@ -420,6 +441,8 @@ sub do_cmd {
         generic_vm_operation(['config.name','config','runtime.host'],\&inv,@exargs);
     } elsif ($command eq 'rmhypervisor') {
         generic_hyp_operation(\&rmhypervisor,@exargs);
+    } elsif ($command eq 'lsvm') {
+        generic_hyp_operation(\&lsvm,@exargs);
     } elsif ($command eq 'mkvm') {
         generic_hyp_operation(\&mkvms,@exargs);
     } elsif ($command eq 'chvm') {
@@ -445,11 +468,11 @@ sub inv {
   }
   my $vmview = $args{vmview};
   my $uuid = $vmview->config->uuid;
-  sendmsg("$node:  UUID/GUID:  $uuid");
+  sendmsg("UUID/GUID:  $uuid",$node);
   my $cpuCount = $vmview->config->hardware->numCPU;
-  sendmsg("$node:  CPUs:  $cpuCount");
+  sendmsg("CPUs:  $cpuCount",$node);
   my $memory = $vmview->config->hardware->memoryMB;
-  sendmsg("$node:  Memory:  $memory MB");
+  sendmsg("Memory:  $memory MB",$node);
   my $devices = $vmview->config->hardware->device;
   my $label;
   my $size;
@@ -459,17 +482,19 @@ sub inv {
     $label = $device->deviceInfo->label;
 
     if($label =~ /^Hard disk/) {
+        $label .= " (d".$device->unitNumber.")";
       $size = $device->capacityInKB / 1024;
       $fileName = $device->backing->fileName;
-
-      sendmsg("$node:  $label:  $size MB @ $fileName");
+      sendmsg("$label:  $size MB @ $fileName",$node);
+    } elsif ($label =~ /Network/) {
+        sendmsg("$label: ".$device->macAddress,$node);
     }
   }
 }
 
 
 #changes the memory, number of cpus and device size
-#can also add and remove disks
+#can also add,resize and remove disks
 sub chvm {
 	my %args = @_;
 	my $node = $args{node};
@@ -501,7 +526,7 @@ sub chvm {
 		"p=s"       => \@purge,
 		"a=s"       => \@add,
 		"resize=s%" => \%resize,
-		"cpus=i"    => \$cpuCount,
+		"cpus=s"    => \$cpuCount,
 		"mem=s"     => \$memory
 	);
 	$SIG{__WARN__} = 'DEFAULT';
@@ -526,11 +551,22 @@ sub chvm {
 
 	my %conargs;
 	if($cpuCount) {
+        if ($cpuCount =~ /^\+(\d+)/) {
+            $cpuCount = $vmview->config->hardware->numCPU+$1;
+        } elsif ($cpuCount =~ /^-(\d+)/) {
+            $cpuCount = $vmview->config->hardware->numCPU-$1;
+        }
 		$conargs{numCPUs} = $cpuCount;
 	}
 
 	if($memory) {
-		$conargs{memoryMB} = getUnits($memory, "M", 1048576);
+        if ($memory =~ /^\+(.+)/) {
+            $conargs{memoryMB} = $vmview->config->hardware->memoryMB + getUnits($1,"M",1048576);
+        } elsif ($memory =~ /^-(\d+)/) {
+            $conargs{memoryMB} = $vmview->config->hardware->memoryMB - getUnits($1,"M",1048576);
+        } else {
+		    $conargs{memoryMB} = getUnits($memory, "M", 1048576);
+        }
 	}
 
 	my $disk;
@@ -545,7 +581,7 @@ sub chvm {
 		for $disk (@deregister) {
 			$device = getDiskByLabel($disk, $devices);
 			unless($device) {
-				sendmsg("$node:  Disk:  $disk does not exist");
+				sendmsg([1,"Disk:  $disk does not exist"],$node);
 				return;
 			}
 			#sendmsg(Dumper($device));
@@ -560,7 +596,7 @@ sub chvm {
 		for $disk (@purge) {
 			$device = getDiskByLabel($disk, $devices);
 			unless($device) {
-				sendmsg("$node:  Disk:  $disk does not exist");
+				sendmsg([1,"Disk:  $disk does not exist"],$node);
 				return;
 			}
 			#sendmsg(Dumper($device));
@@ -590,10 +626,10 @@ sub chvm {
 			}
 		}
 		if($scsiCont) {
-			$scsiUnit = getHighestUnit($scsiCont->{key},$devices);
+			$scsiUnit = getAvailUnit($scsiCont->{key},$devices);
 		}
 		if($ideCont) {
-			$ideUnit = getHighestUnit($ideCont->{key},$devices);
+			$ideUnit = getAvailUnit($ideCont->{key},$devices);
 		}
 		unless ($hyphash{$hyp}->{datastoremap}) { validate_datastore_prereqs([],$hyp); }
     		push @devChanges, create_storage_devs($node,$hyphash{$hyp}->{datastoremap},$addSizes,$scsiCont,$scsiUnit,$ideCont,$ideUnit);
@@ -606,10 +642,14 @@ sub chvm {
 				my $disk = $device;
 				$device = getDiskByLabel($disk, $devices);
 				unless($device) {
-					sendmsg("$node:  Disk:  $disk does not exist");
+					sendmsg([1,"Disk:  $disk does not exist"],$node);
 					return;
 				}
-				$value = getUnits($value, "G", 1024);
+                if ($value =~ /^\+(.+)/) {
+                    $value = $device->capacityInKB + getUnits($1,"G",1024);
+                } else {
+				    $value = getUnits($value, "G", 1024);
+                }
 				my $newDevice = VirtualDisk->new(deviceInfo => $device->deviceInfo,
                         			key => $device->key,
 						controllerKey => $device->controllerKey,
@@ -639,14 +679,20 @@ sub chvm {
 
 }
 
-sub getHighestUnit {
+sub getAvailUnit {
   my $contKey = shift;
   my $devices = shift;
-  my $highestUnit = 0;
+  my %usedids;
+  $usedids{7}=1;
+  $usedids{'7'}=1; #TODO: figure out which of these is redundant, the string or the number variant
   for my $device (@$devices) {
-    if(($device->{controllerKey} eq $contKey) && ($device->{unitNumber} >= $highestUnit)) {
-      $highestUnit = $device->{unitNumber}+1;
+    if($device->{controllerKey} eq $contKey) {
+        $usedids{$device->{unitNumber}}=1;
     }
+  }
+  my $highestUnit=0;
+  while ($usedids{$highestUnit}) {
+      $highestUnit++;
   }
   return $highestUnit;
 }
@@ -664,7 +710,12 @@ sub getDiskByLabel {
 
     if($cmdLabel eq $label) {
       return $device;
+    } elsif (($label =~ /^Hard disk/) and ($cmdLabel =~ /^d(\d+)/)) {
+        if ($device->unitNumber == $1) {
+            return $device;
+        }
     }
+
   }
   return undef;
 }
@@ -672,7 +723,7 @@ sub getDiskByLabel {
 #takes a label for a hard disk and prepends "Hard disk " if it's not there already
 sub commandLabel {
   my $label = shift;
-  if($label =~ /^Hard disk/) {
+  if(($label =~ /^Hard disk/) or ($label =~ /^d\d+/)) {
     return $label;
   }
   return "Hard disk ".$label;
@@ -853,14 +904,47 @@ sub relay_vmware_err {
     }
 }
 
-sub migrate_callback {
+sub relocate_callback {
     my $task = shift;
     my $parms = shift;
     my $state = $task->info->state->val;
     if ($state eq 'success') {
+        #my $vmtab = xCAT::Table->new('vm'); #TODO: update vm.storage?
+        #$vmtab->setNodeAttribs($parms->{node},{host=>$parms->{target}});
+        sendmsg(":relocated to to ".$parms->{target},$parms->{node});
+    } else {
+        relay_vmware_err($task,"Relocating to ".$parms->{target}." ",$parms->{node});
+    }
+}
+sub migrate_ok { #look like a successful migrate, callback for registering a vm
+     my %args = @_;
+     my $vmtab = xCAT::Table->new('vm');
+     $vmtab->setNodeAttribs($args{nodes}->[0],{host=>$args{target}});
+     sendmsg("migrated to ".$args{target},$args{nodes}->[0]);
+}
+sub migrate_callback {
+    my $task = shift;
+    my $parms = shift;
+    my $state = $task->info->state->val;
+    if (not $parms->{skiptodeadsource} and $state eq 'success') {
         my $vmtab = xCAT::Table->new('vm');
         $vmtab->setNodeAttribs($parms->{node},{host=>$parms->{target}});
         sendmsg("migrated to ".$parms->{target},$parms->{node});
+    } elsif($parms->{offline}) { #try a forceful RegisterVM instead
+        my $target = $parms->{target};
+        my $hostview = $hyphash{$target}->{conn}->find_entity_view(view_type=>'VirtualMachine',properties=>['config.name'],filter=>{name=>$parms->{node}});
+   if ($hostview) { #this means vcenter still has it in inventory, but on a dead node...
+                    #unfortunately, vcenter won't give up the old one until we zap the dead hypervisor
+                    #also unfortunately, it doesn't make it easy to find said hypervisor..
+        $hostview = $hyphash{$parms->{src}}->{conn}->get_view(mo_ref=>$hyphash{$parms->{src}}->{deletionref});
+       	$task = $hostview->Destroy_Task();
+        $running_tasks{$task}->{task} = $task;
+        $running_tasks{$task}->{callback} = \&migrate_callback;
+        $running_tasks{$task}->{conn} = $hyphash{$target}->{vcenter}->{conn};
+        $running_tasks{$task}->{data} = { offline=>1, src=>$parms->{src}, node=>$parms->{node}, target=>$target, skiptodeadsource=>1 };
+	} else { #it is completely gone, attempt a register_vm strategy
+           register_vm($target,$parms->{node},undef,\&migrate_ok,{ nodes => [$parms->{node}], target=>$target, },"failonerror");
+	}
     } else {
         relay_vmware_err($task,"Migrating to ".$parms->{target}." ",$parms->{node});
     }
@@ -946,17 +1030,54 @@ sub sendmsg {
 }
 
 
-sub actually_migrate {
-    my %args = %{shift()};
+sub migrate {
+    my %args = @_;
     my @nodes = @{$args{nodes}};
-    my $target = $args{target};
     my $hyp = $args{hyp};
-    my $vcenter = $args{vcenter};
-    if ($vcenterhash{$vcenter}->{$hyp} eq 'bad' or $vcenterhash{$vcenter}->{$target} eq 'bad') {
+    my $vcenter = $hyphash{$hyp}->{vcenter}->{name};
+    my $datastoredest;
+    my $offline;
+    @ARGV=@{$args{exargs}};
+    unless (GetOptions(
+        's=s' => \$datastoredest,
+        'f' => \$offline,
+        )) {
+        sendmsg([1,"Error parsing arguments"]);
+        return;
+    }
+    my $target=$hyp; #case for storage migration
+    if ($datastoredest and scalar @ARGV) {
+        sendmsg([1,"Unable to mix storage migration and processing of arguments ".join(' ',@ARGV)]);
+        return;
+    } elsif (@ARGV) {
+        $target=shift @ARGV;
+        if (@ARGV) {
+            sendmsg([1,"Unrecognized arguments ".join(' ',@ARGV)]);
+            return;
+        }
+    } elsif ($datastoredest) { #storage migration only
+        unless (validate_datastore_prereqs([],$hyp,{$datastoredest=>\@nodes})) {
+            sendmsg([1,"Unable to find/mount target datastore $datastoredest"]);
+            return;
+        }
+        foreach (@nodes) {
+            my $hostview = $hyphash{$hyp}->{conn}->find_entity_view(view_type=>'VirtualMachine',properties=>['config.name'],filter=>{name=>$_});
+            my $relocatspec = VirtualMachineRelocateSpec->new(
+                datastore=>$hyphash{$hyp}->{datastorerefmap}->{$datastoredest},
+                );
+            my $task = $hostview->RelocateVM_Task(spec=>$relocatspec);
+            $running_tasks{$task}->{task} = $task;
+            $running_tasks{$task}->{callback} = \&relocate_callback;
+            $running_tasks{$task}->{hyp} = $args{hyp}; 
+            $running_tasks{$task}->{data} = { node => $_, target=>$datastoredest }; 
+        }
+        return;
+    }
+    if ((not $offline and $vcenterhash{$vcenter}->{$hyp} eq 'bad') or $vcenterhash{$vcenter}->{$target} eq 'bad') {
         sendmsg([1,"Unable to migrate ".join(',',@nodes)." to $target due to inability to validate vCenter connectivity"]);
         return;
     }
-    if ($vcenterhash{$vcenter}->{$hyp} eq 'good' and $vcenterhash{$vcenter}->{$target} eq 'good') {
+    if (($offline or $vcenterhash{$vcenter}->{$hyp} eq 'good') and $vcenterhash{$vcenter}->{$target} eq 'good') {
         unless (validate_datastore_prereqs(\@nodes,$target)) {
             sendmsg([1,"Unable to verify storage state on target system"]);
             return;
@@ -970,7 +1091,18 @@ sub actually_migrate {
             $hyphash{$target}->{pool} = $hyphash{$target}->{conn}->get_view(mo_ref=>$dstview->parent,properties=>['resourcePool'])->resourcePool;
         }
         foreach (@nodes) {
-            my $srcview = $hyphash{$hyp}->{conn}->find_entity_view(view_type=>'VirtualMachine',properties=>['config.name'],filter=>{name=>$_});
+            my $srcview = $hyphash{$target}->{conn}->find_entity_view(view_type=>'VirtualMachine',properties=>['config.name'],filter=>{name=>$_});
+	    if ($offline and not $srcview) { #we have a request to resurrect the dead..
+           	register_vm($target,$_,undef,\&migrate_ok,{ nodes => [$_], exargs => $args{exargs}, target=>$target, hyp => $args{hyp}, offline => $offline },"failonerror");
+		return;
+	    } elsif (not $srcview) { 
+                $srcview = $hyphash{$hyp}->{conn}->find_entity_view(view_type=>'VirtualMachine',properties=>['config.name'],filter=>{name=>$_});
+	    }
+	    unless ($srcview) {
+		sendmsg([1,"Unable to locate node in vCenter"],$_);
+		next;
+	    }
+		
             my $task = $srcview->MigrateVM_Task(
                 host=>$dstview,
                 pool=>$hyphash{$target}->{pool},
@@ -978,7 +1110,7 @@ sub actually_migrate {
             $running_tasks{$task}->{task} = $task;
             $running_tasks{$task}->{callback} = \&migrate_callback;
             $running_tasks{$task}->{hyp} = $args{hyp}; 
-            $running_tasks{$task}->{data} = { node => $_, target=>$target }; 
+            $running_tasks{$task}->{data} = { node => $_, src=>$hyp, target=>$target, offline => $offline }; 
         }
     } else {
         #sendmsg("Waiting for BOTH to be 'good'");
@@ -986,37 +1118,6 @@ sub actually_migrate {
     }
 }
 
-sub migrate {
-    my %args = @_;
-    my $nodes = $args{nodes};
-    my $hyp = $args{hyp};
-    my $exargs = $args{exargs};
-    my $tgthyp = $exargs->[0];
-    my $destination = ${$args{exargs}}[0];
-    my $vcenter = $hyphash{$hyp}->{vcenter}->{name};
-    actually_migrate({
-        nodes=>$nodes,
-        hyp=>$hyp,
-        target=>$tgthyp,
-        vcenter=>$vcenter
-    });
-#The following code is now redundant.  validate_vcenter_prereqs is now called well before this point.
-#We do target first to prevent multiple sources to single destination from getting confused
-#one source to multiple destinations (i.e. revacuate) may require other provisions
-#by getting confused, I mean that actually migrate not thinking both are good before it's correct
-#   validate_vcenter_prereqs($tgthyp, \&actually_migrate, {
-#       nodes=>$nodes,
-#       hyp=>$hyp,
-#       target=>$tgthyp,
-#       vcenter=>$vcenter
-#   });
-#   validate_vcenter_prereqs($hyp, \&actually_migrate, {
-#       nodes=>$nodes,
-#       hyp=>$hyp,
-#       target=>$tgthyp,
-#       vcenter=>$vcenter
-#   });
-}
 
 sub reconfig_callback {
     my $task = shift;
@@ -1402,6 +1503,22 @@ sub rmhypervisor_inmaintenance {
     }
 }
 
+sub lsvm {
+    my %args = @_;
+    my $hyp = $args{hyp};
+    $hyphash{$hyp}->{hostview} = get_hostview(hypname=>$hyp,conn=>$hyphash{$hyp}->{conn}); #,properties=>['config','configManager']); 
+    use Data::Dumper;
+    my $vms = $hyphash{$hyp}->{hostview}->vm;
+    unless ($vms) {
+        return;
+    }
+    foreach (@$vms) {
+        my $vmv = $hyphash{$hyp}->{conn}->get_view(mo_ref=>$_);
+        sendmsg($vmv->name,$hyp);
+    }
+    return;
+}
+
 sub rmhypervisor {
     my %args = @_;
     my $hyp = $args{hyp};
@@ -1492,6 +1609,7 @@ sub register_vm {#Attempt to register existing instance of a VM
     my $disksize = shift;
     my $blockedfun = shift; #a pointer to a blocked function to call on success
     my $blockedargs = shift; #hash reference to call blocked function with
+    my $failonerr = shift;
     my $task;
     validate_network_prereqs([keys %{$hyphash{$hyp}->{nodes}}],$hyp);
     unless (defined $hyphash{$hyp}->{datastoremap} or validate_datastore_prereqs([keys %{$hyphash{$hyp}->{nodes}}],$hyp)) {
@@ -1514,6 +1632,7 @@ sub register_vm {#Attempt to register existing instance of a VM
             disksize => $disksize,
             blockedfun => $blockedfun,
             blockedargs => $blockedargs,
+            errregister=>$failonerr,
             hyp => $hyp
         });
     }
@@ -1526,6 +1645,7 @@ sub register_vm {#Attempt to register existing instance of a VM
             disksize => $disksize,
             blockedfun => $blockedfun,
             blockedargs => $blockedargs,
+            errregister=>$failonerr,
             hyp => $hyp
         };
     }
@@ -1537,6 +1657,8 @@ sub register_vm_callback {
     if (not $task or $task->info->state->val eq 'error') { #TODO: fail for 'rpower' flow, mkvm is too invasive in VMWare to be induced by 'rpower on'
         if (not defined $args->{blockedfun}) {
             mknewvm($args->{node},$args->{disksize},$args->{hyp});
+        } elsif ($args->{errregister}) {
+            relay_vmware_err($task,"",$args->{node});
         } else {
             sendmsg([1,"mkvm must be called before use of this function"],$args->{node});
         }
@@ -1861,6 +1983,13 @@ sub validate_vcenter_prereqs { #Communicate with vCenter and ensure this host is
                 enable_vmotion(hypname=>$hyp,hostview=>$_,conn=>$hyphash{$hyp}->{vcenter}->{conn});
                 $vcenterhash{$vcenter}->{$hyp} = 'good';
                 $depfun->($depargs);
+                if ($_->parent->type eq 'ClusterComputeResource') { #if it is in a cluster, we can directly remove it
+                    $hyphash{$hyp}->{deletionref} = $_->{mo_ref}; 
+                } elsif ($_->parent->type eq 'ComputeResource') { #For some reason, we must delete the container instead
+                    $hyphash{$hyp}->{deletionref} = $_->{parent}; #save off a reference to delete hostview off just in case
+                }
+
+
                 return 1;
             } else {
                 my $ref_to_delete;
@@ -1890,16 +2019,18 @@ sub validate_vcenter_prereqs { #Communicate with vCenter and ensure this host is
         }
     }
     #If still in function, haven't found any likely host entries, make a new one
-    eval {
-        $hyphash{$hyp}->{conn} = Vim->new(service_url=>"https://$hyp/sdk"); #Direct connect to install/check licenses
-    	$hyphash{$hyp}->{conn}->login(user_name=>$hyphash{$hyp}->{username},password=>$hyphash{$hyp}->{password});
-    };
-    if ($@) {
-		sendmsg([1,": Failed to communicate with $hyp"]);
-                 $hyphash{$hyp}->{conn} = undef;
-                return "failed";
+    unless ($hyphash{$hyp}->{offline}) {
+        eval {
+            $hyphash{$hyp}->{conn} = Vim->new(service_url=>"https://$hyp/sdk"); #Direct connect to install/check licenses
+        	$hyphash{$hyp}->{conn}->login(user_name=>$hyphash{$hyp}->{username},password=>$hyphash{$hyp}->{password});
+        };
+        if ($@) {
+    		sendmsg([1,": Failed to communicate with $hyp"]);
+                     $hyphash{$hyp}->{conn} = undef;
+                    return "failed";
+        }
+        validate_licenses($hyp);
     }
-    validate_licenses($hyp);
     addhosttovcenter(undef,{
         depfun => $depfun,
         depargs => $depargs,
@@ -1922,6 +2053,15 @@ sub  addhosttovcenter {
         if ($state eq 'error') {
             die;
         }
+    }
+    if ($hyphash{$args->{hypname}}->{offline}) { #let it stay offline
+        $hypready{$args->{hypname}}=1; #declare readiness
+        #enable_vmotion(hypname=>$args->{hypname},hostview=>$args->{hostview},conn=>$args->{conn});
+        $vcenterhash{$args->{vcenter}}->{$args->{hypname}} = 'good';
+        if (defined $args->{depfun}) { #If a function is waiting for the host connect to go valid, call it
+            $args->{depfun}->($args->{depargs});
+        }
+        return;
     }
     if ($tablecfg{hypervisor}->{$hyp}->[0]->{cluster}) {
         my $cluster = get_clusterview(clustname=>$tablecfg{hypervisor}->{$hyp}->[0]->{cluster},conn=>$hyphash{$hyp}->{vcenter}->{conn});
@@ -2162,6 +2302,7 @@ sub validate_network_prereqs {
 sub validate_datastore_prereqs {
     my $nodes = shift;
     my $hyp = shift;
+    my $newdatastores = shift; # a hash reference of URLs to afflicted nodes outside of table space
     my $hypconn = $hyphash{$hyp}->{conn};
     my $hostview = $hyphash{$hyp}->{hostview};
     unless ($hostview) {
@@ -2184,6 +2325,7 @@ sub validate_datastore_prereqs {
                         sendmsg([1,"Unable to resolve VMware specified host '".$dsv->info->nas->remoteHost."' to an address, problems may occur"]);
                     }
                     $hyphash{$hyp}->{datastoremap}->{"nfs://".$mnthost.$dsv->info->nas->remotePath}=$dsv->info->name;
+                    $hyphash{$hyp}->{datastorerefmap}->{"nfs://".$mnthost.$dsv->info->nas->remotePath}=$_;
                 } #TODO: care about SMB
             } #TODO: care about VMFS
         }
@@ -2194,7 +2336,7 @@ sub validate_datastore_prereqs {
         if ($tablecfg{vm}->{$node}->[0]->{cfgstore}) {
             push @storage,$tablecfg{vm}->{$node}->[0]->{cfgstore};
         }
-        foreach (@storage) {
+        foreach (@storage) { #TODO: merge this with foreach loop below.  Here we could build onto $newdatastores instead, for faster operation at scale
             s/=.*//; #remove device type information from configuration
             s/\/$//; #Strip trailing slash if specified, to align to VMware semantics
             if (/:\/\//) {
@@ -2214,10 +2356,42 @@ sub validate_datastore_prereqs {
                 }
                 unless ($hyphash{$hyp}->{datastoremap}->{$uri}) { #If not already there, must mount it
                     $refresh_names=1;
-                    $hyphash{$hyp}->{datastoremap}->{$uri}=mount_nfs_datastore($hostview,$location);
+                    ($hyphash{$hyp}->{datastoremap}->{$uri},$hyphash{$hyp}->{datastorerefmap}->{$uri})=mount_nfs_datastore($hostview,$location);
                 }
             } else {
                 sendmsg([1,": $_ not supported storage specification for ESX plugin, 'nfs://<server>/<path>' only currently supported vm.storage supported for ESX at the moment"],$node);
+                return 0;
+            } #TODO: raw device mapping, VMFS via iSCSI, VMFS via FC?
+        }
+    }
+    if (ref $newdatastores) {
+        foreach (keys %$newdatastores) {
+            s/\/$//; #Strip trailing slash if specified, to align to VMware semantics
+            if (/:\/\//) {
+                ($method,$location) = split /:\/\//,$_,2;
+                (my $server, my $path) = split /\//,$location,2;
+                $server =~ s/:$//; #remove a : if someone put it in out of nfs mount habit
+                my $servern = inet_aton($server);
+                unless ($servern) {
+                    sendmsg([1,": Unable to resolve '$server' to an address, check vm.cfgstore/vm.storage"]);
+                    return 0;
+                }
+                $server = inet_ntoa($servern);
+                my $uri = "nfs://$server/$path";
+                unless ($method =~ /nfs/) {
+                    foreach (@{$newdatastores->{$_}}) {
+                        sendmsg([1,": $method is unsupported at this time (nfs would be)"],$_);
+                    }
+                    return 0;
+                }
+                unless ($hyphash{$hyp}->{datastoremap}->{$uri}) { #If not already there, must mount it
+                    $refresh_names=1;
+                    ($hyphash{$hyp}->{datastoremap}->{$uri},$hyphash{$hyp}->{datastorerefmap}->{$uri})=mount_nfs_datastore($hostview,$location);
+                }
+            } else {
+                foreach (@{$newdatastores->{$_}}) {
+                    sendmsg([1,": $_ not supported storage specification for ESX plugin, 'nfs://<server>/<path>' only currently supported vm.storage supported for ESX at the moment"],$_);
+                }
                 return 0;
             } #TODO: raw device mapping, VMFS via iSCSI, VMFS via FC?
         }
@@ -2237,6 +2411,7 @@ sub validate_datastore_prereqs {
                             sendmsg([1,"Unable to resolve VMware specified host '".$dsv->info->nas->remoteHost."' to an address, problems may occur"]);
                         }
                         $hyphash{$hyp}->{datastoremap}->{"nfs://".$mnthost.$dsv->info->nas->remotePath}=$dsv->info->name;
+                        $hyphash{$hyp}->{datastorerefmap}->{"nfs://".$mnthost.$dsv->info->nas->remotePath}=$_;
                     } #TODO: care about SMB
                 } #TODO: care about VMFS
             }
@@ -2282,8 +2457,9 @@ sub mount_nfs_datastore {
                                     remotePath=>"/".$path);
     my $dsmv = $hostview->{vim}->get_view(mo_ref=>$hostview->configManager->datastoreSystem);
 
+    my $dsref;
     eval {
-      $dsmv->CreateNasDatastore(spec=>$nds);
+      $dsref=$dsmv->CreateNasDatastore(spec=>$nds);
     };
 
     if ($@) {
@@ -2293,15 +2469,7 @@ sub mount_nfs_datastore {
         unless &match_nfs_datastore($server,"/$path",$hostview->{vim});
     }
 
-    return $location;
-}
-sub lsvm {
-	my $hyp = shift;
-	my $hyphash = shift;
-	my $callback = shift;
-	my ($node,$img, $imgname, $out);
-	my $f1 = `ssh $hyp "ls /vmfs/volumes/images/"`;
- 	$callback->({data=>[$f1]});
+    return ($location,$dsref);
 }
 
 
