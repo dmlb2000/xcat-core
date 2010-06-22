@@ -2072,6 +2072,7 @@ sub format_stanza {
         #################################
         # Add each attribute
         #################################
+        $result .= "\thcp=$name\n";
         foreach ( @attribs ) {
             my $d = $data[$i++];
 
@@ -2149,6 +2150,7 @@ sub format_xml {
         #################################
         # Add each attribute
         #################################
+        $href->{Node}->{"hcp"} = $name;
         foreach ( @attribs ) {
             my $d = $data[$i++];
 
