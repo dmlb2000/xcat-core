@@ -175,7 +175,7 @@ TRIES=0
 if [ ! "$IPMIVER" == "1.5"  ]; then 
     echo "Enabling IPMI v 2.0 LAN access:"
     SUPPORTEDSUITES=`ipmitool lan print $LANCHAN|grep Suites|awk -F: '{print $2}'|sed -e 's/ 0//'`
-    PRIVS="a"
+    PRIVS="X"
     for priv in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
         if echo $SUPPORTEDSUITES|grep $priv > /dev/null; then
             PRIVS="$PRIVS"a
