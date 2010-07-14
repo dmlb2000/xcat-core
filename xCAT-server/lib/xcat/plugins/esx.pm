@@ -834,12 +834,15 @@ sub get_clusterview {
     if ($args{properties}) {
         $subargs{properties}=$args{properties};
     }
-    foreach (@{$args{conn}->find_entity_views(%subargs)}) {
-       if ($_->name eq "$clustname") {
-           return $_;
-           last;
-       }
-    }
+    $subargs{filter}={name=>$clustname};
+    my $view = $args{conn}->find_entity_view(%subargs);
+    return $view;
+   #foreach (@{$args{conn}->find_entity_views(%subargs)}) {
+   #   if ($_->name eq "$clustname") {
+   #       return $_;
+   #       last;
+   #   }
+   #}
 }
 
 sub get_hostview {
@@ -865,13 +868,27 @@ sub get_hostview {
     foreach (split /\s+/,$aliases) {
         push @matchvalues,$_;
     }
-    foreach (@{$args{conn}->find_entity_views(%subargs)}) {
-       my $view = $_;
-       if ($_->name =~ /$host(?:\.|\z)/ or $_->name =~ /localhost(?:\.|\z)/ or grep { $view->name =~ /$_(?:\.|\z)/ } @matchvalues) {
-           return $view;
-           last;
-       }
+    my $view;
+    $subargs{filter}={'name' =~ qr/$host(?:\.|\z)/};
+    $view = $args{conn}->find_entity_view(%subargs);
+    if ($view) { return $view; }
+    foreach (@matchvalues) {
+        $subargs{filter}={'name' =~ qr/$_(?:\.|\z)/};
+        $view = $args{conn}->find_entity_view(%subargs);
+        if ($view) { return $view; }
     }
+    $subargs{filter}={'name' =~ qr/localhost(?:\.|\z)/};
+    $view = $args{conn}->find_entity_view(%subargs);
+    if ($view) { return $view; }
+    return undef; #rest of function should be obsoleted, going to run with that assumption for 2.5 at least
+    $subargs{filter}={'name' =~ qr/.*/};
+#   foreach (@{$args{conn}->find_entity_views(%subargs)}) {
+#      my $view = $_;
+#      if ($_->name =~ /$host(?:\.|\z)/ or $_->name =~ /localhost(?:\.|\z)/ or grep { $view->name =~ /$_(?:\.|\z)/ } @matchvalues) {
+#          return $view;
+#          last;
+#      }
+#   }
 }
 sub enable_vmotion {
 #TODO: vmware 3.x semantics too?  this is 4.0...
@@ -1401,7 +1418,13 @@ sub generic_vm_operation { #The general form of firing per-vm requests to ESX hy
     foreach $hyp (keys %hyphash) {
         if ($viavcenterbyhyp->{$hyp}) {
             if ($vcviews{$hyphash{$hyp}->{vcenter}->{name}}) { next; }
-            $vcviews{$hyphash{$hyp}->{vcenter}->{name}} = $hyphash{$hyp}->{conn}->find_entity_views(view_type => 'VirtualMachine',properties=>$properties);
+            my @localvcviews=();
+            my $node;
+    	    foreach $node (sort (keys %{$hyphash{$hyp}->{nodes}})){
+                push @localvcviews,$hyphash{$hyp}->{conn}->find_entity_view(view_type => 'VirtualMachine',properties=>$properties,filter=>{'config.name'=>qr/^$node/});
+            }
+            $vcviews{$hyphash{$hyp}->{vcenter}->{name}} = \@localvcviews;
+            #$vcviews{$hyphash{$hyp}->{vcenter}->{name}} = $hyphash{$hyp}->{conn}->find_entity_views(view_type => 'VirtualMachine',properties=>$properties);
             foreach (@{$vcviews{$hyphash{$hyp}->{vcenter}->{name}}}) {
                 my $node = $_->{'config.name'};
                 unless (defined $tablecfg{vm}->{$node}) {
@@ -1438,7 +1461,12 @@ sub generic_vm_operation { #The general form of firing per-vm requests to ESX hy
         if ($viavcenterbyhyp->{$hyp}) { 
             $vmviews= $vcviews{$hyphash{$hyp}->{vcenter}->{name}}
         } else {
-		    $vmviews = $hyphash{$hyp}->{conn}->find_entity_views(view_type => 'VirtualMachine',properties=>$properties);
+            $vmviews = [];
+            my $node;
+    	    foreach $node (sort (keys %{$hyphash{$hyp}->{nodes}})){
+    		    push @{$vmviews},$hyphash{$hyp}->{conn}->find_entity_view(view_type => 'VirtualMachine',properties=>$properties,filter=>{'config.name'=>qr/^$node/});
+            }
+		    #$vmviews = $hyphash{$hyp}->{conn}->find_entity_views(view_type => 'VirtualMachine',properties=>$properties);
 	    }
         my %mgdvms; #sort into a hash for convenience
         foreach (@$vmviews) {
@@ -1452,12 +1480,6 @@ sub generic_vm_operation { #The general form of firing per-vm requests to ESX hy
                 vmview=>$mgdvms{$node},
                 exargs=>\@exargs
             );
-#REMINDER FOR RINV TO COME
-#     foreach (@nothing) { #@{$mgdvms{$node}->config->hardware->device}) {
-#           if (defined $_->{macAddress}) {
-#                  print "\nFound a mac: ".$_->macAddress."\n";
-#               }
-#           }
         }
     }
 }
@@ -2015,45 +2037,49 @@ sub validate_vcenter_prereqs { #Communicate with vCenter and ensure this host is
         userName=>$hyphash{$hyp}->{username},
         force=>1,
         );
-    foreach  (@{$hyphash{$hyp}->{vcenter}->{conn}->find_entity_views(view_type=>'HostSystem',properties=>['summary.config.name','summary.runtime.connectionState','runtime.inMaintenanceMode','parent','configManager'])}) {
-        if ($_->{'summary.config.name'} =~ /^$hyp(?:\.|\z)/ or $_->{'summary.config.name'} =~ /^$name(?:\.|\z)/) { #Looks good, call the dependent function after declaring the state of vcenter to hypervisor as good
-            if ($_->{'summary.runtime.connectionState'}->val eq 'connected') {
-                enable_vmotion(hypname=>$hyp,hostview=>$_,conn=>$hyphash{$hyp}->{vcenter}->{conn});
+    my $hview;
+    $hview = $hyphash{$hyp}->{vcenter}->{conn}->find_entity_view(view_type=>'HostSystem',properties=>['summary.config.name','summary.runtime.connectionState','runtime.inMaintenanceMode','parent','configManager'],filter=>{'summary.config.name'=>qr/^$hyp(?:\.|\z)/});
+    unless ($hview) {
+         $hview = $hyphash{$hyp}->{vcenter}->{conn}->find_entity_view(view_type=>'HostSystem',properties=>['summary.config.name','summary.runtime.connectionState','runtime.inMaintenanceMode','parent','configManager'],filter=>{'summary.config.name'=>qr/^$name(?:\.|\z)/});
+    }
+    if ($hview) { 
+        if ($hview->{'summary.config.name'} =~ /^$hyp(?:\.|\z)/ or $hview->{'summary.config.name'} =~ /^$name(?:\.|\z)/) { #Looks good, call the dependent function after declaring the state of vcenter to hypervisor as good
+            if ($hview->{'summary.runtime.connectionState'}->val eq 'connected') {
+                enable_vmotion(hypname=>$hyp,hostview=>$hview,conn=>$hyphash{$hyp}->{vcenter}->{conn});
                 $vcenterhash{$vcenter}->{$hyp} = 'good';
                 $depfun->($depargs);
-                if ($_->parent->type eq 'ClusterComputeResource') { #if it is in a cluster, we can directly remove it
-                    $hyphash{$hyp}->{deletionref} = $_->{mo_ref}; 
-                } elsif ($_->parent->type eq 'ComputeResource') { #For some reason, we must delete the container instead
-                    $hyphash{$hyp}->{deletionref} = $_->{parent}; #save off a reference to delete hostview off just in case
+                if ($hview->parent->type eq 'ClusterComputeResource') { #if it is in a cluster, we can directly remove it
+                    $hyphash{$hyp}->{deletionref} = $hview->{mo_ref}; 
+                } elsif ($hview->parent->type eq 'ComputeResource') { #For some reason, we must delete the container instead
+                    $hyphash{$hyp}->{deletionref} = $hview->{parent}; #save off a reference to delete hostview off just in case
                 }
 
 
                 return 1;
             } else {
                 my $ref_to_delete;
-                if ($_->parent->type eq 'ClusterComputeResource') { #We are allowed to specifically kill a host in a cluster
-                    $ref_to_delete = $_->{mo_ref};
-                } elsif ($_->parent->type eq 'ComputeResource') { #For some reason, we must delete the container instead
-                    $ref_to_delete = $_->{parent};
+                if ($hview->parent->type eq 'ClusterComputeResource') { #We are allowed to specifically kill a host in a cluster
+                    $ref_to_delete = $hview->{mo_ref};
+                } elsif ($hview->parent->type eq 'ComputeResource') { #For some reason, we must delete the container instead
+                    $ref_to_delete = $hview->{parent};
                 }
                 my $task = $hyphash{$hyp}->{vcenter}->{conn}->get_view(mo_ref=>$ref_to_delete)->Destroy_Task();
                 $running_tasks{$task}->{task} = $task;
                 $running_tasks{$task}->{callback} = \&addhosttovcenter;
                 $running_tasks{$task}->{conn} = $hyphash{$hyp}->{vcenter}->{conn};
-                $running_tasks{$task}->{data} = { depfun => $depfun, depargs => $depargs, conn=>  $hyphash{$hyp}->{vcenter}->{conn}, connspec=>$connspec,hostview=>$_,hypname=>$hyp,vcenter=>$vcenter };
+                $running_tasks{$task}->{data} = { depfun => $depfun, depargs => $depargs, conn=>  $hyphash{$hyp}->{vcenter}->{conn}, connspec=>$connspec,hostview=>$hview,hypname=>$hyp,vcenter=>$vcenter };
                 return undef;
 #The rest would be shorter/ideal, but seems to be confused a lot by stateless
 #Maybe in a future VMWare technology level the following would work better
 #than it does today
-#               my $task = $_->ReconnectHost_Task(cnxSpec=>$connspec);
-#               my $task = $_->DisconnectHost_Task();
+#               my $task = $hview_->ReconnectHost_Task(cnxSpec=>$connspec);
+#               my $task = $hview->DisconnectHost_Task();
 #               $running_tasks{$task}->{task} = $task;
 #               $running_tasks{$task}->{callback} = \&disconnecthost_callback;
 #               $running_tasks{$task}->{conn} = $hyphash{$hyp}->{vcenter}->{conn};
-#               $running_tasks{$task}->{data} = { depfun => $depfun, depargs => $depargs, conn=>  $hyphash{$hyp}->{vcenter}->{conn}, connspec=>$connspec,hostview=>$_,hypname=>$hyp,vcenter=>$vcenter };
+#               $running_tasks{$task}->{data} = { depfun => $depfun, depargs => $depargs, conn=>  $hyphash{$hyp}->{vcenter}->{conn}, connspec=>$connspec,hostview=>$hview,hypname=>$hyp,vcenter=>$vcenter };
 #ADDHOST
             }
-            last;
         }
     }
     #If still in function, haven't found any likely host entries, make a new one
