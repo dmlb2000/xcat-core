@@ -156,9 +156,17 @@ sub preprocess_request {
 	# build an individual request for each service node
 	my $service  = "xcat";
 	my @hyps=keys(%hyp_hash);
-    if ($command eq 'rmigrate') {
-        my $dsthyp = $extraargs->[0];
-        push @hyps,$dsthyp;
+    if ($command eq 'rmigrate' and (scalar @{$extraargs} >= 1)) {
+        @ARGV=@{$extraargs};
+        my $offline;
+        my $junk;
+        GetOptions(
+            "f" => \$offline,
+           );
+        my $dsthyp = $ARGV[0];
+        if ($dsthyp) {
+            push @hyps,$dsthyp;
+        }
     }
     #TODO: per hypervisor table password lookup
 	my $sn = xCAT::Utils->get_ServiceNode(\@hyps, $service, "MN");
@@ -281,6 +289,14 @@ sub process_request {
         }
 		my $ent;
 		for (my $i=0; $i<@nodes; $i++){
+			if ($command eq 'rmigrate' and grep /-f/, @exargs) { #offline migration, 
+				$hyphash{$hyp}->{offline} = 1; #if it is migrate and it has nodes, it is a source hypervisor apt to be offline
+                                               #this will hint to relevant code to operate under the assumption of a
+                                               #downed hypervisor source
+                                               #note this will make dangerous assumptions, it will make a very minimal attempt
+                                               #to operate normally, but really should only be called if the source is down and
+                                               #fenced (i.e. storage, network, or turned off and stateless
+			}
 			my $node = $nodes[$i];
 			#my $nodeid = $ids[$i];
 			$hyphash{$hyp}->{nodes}->{$node}=1;# $nodeid;
@@ -359,23 +375,26 @@ sub process_request {
         wait_for_tasks();
         sleep (1); #We'll check back in every second.  Unfortunately, we have to poll since we are in web service land
     }
+    my @badhypes;
     if (grep { $_ == -1 } values %hypready) {
-        my @badhypes;
         foreach (keys %hypready) {
             if ($hypready{$_} == -1) {
                 push @badhypes,$_;
-		my @relevant_nodes = sort (keys %{$hyphash{$_}->{nodes}});
-		foreach (@relevant_nodes) {
-			sendmsg([1,": hypervisor unreachable"],$_);
-		}
-		delete $hyphash{$_};
+                my @relevant_nodes = sort (keys %{$hyphash{$_}->{nodes}});
+                foreach (@relevant_nodes) {
+                    sendmsg([1,": hypervisor unreachable"],$_);
+                }
+                delete $hyphash{$_};
             }
         }
-        sendmsg([1,": The following hypervisors failed to become ready for the operation: ".join(',',@badhypes)]);
+        if (@badhypes) { 
+            sendmsg([1,": The following hypervisors failed to become ready for the operation: ".join(',',@badhypes)]);
+        }
     } 
     do_cmd($command,@exargs);
-	foreach my $hyp (sort(keys %hyphash)){
-            $hyphash{$hyp}->{conn}->logout();
+    foreach (@badhypes) { delete $hyphash{$_}; }
+    foreach my $hyp (sort(keys %hyphash)){
+      $hyphash{$hyp}->{conn}->logout();
     }
 }
 
@@ -599,14 +618,35 @@ sub relay_vmware_err {
     }
 }
 
+sub migrate_ok { #look like a successful migrate, callback for registering a vm
+     my %args = @_;
+     my $vmtab = xCAT::Table->new('vm');
+     $vmtab->setNodeAttribs($args{nodes}->[0],{host=>$args{target}});
+     sendmsg("migrated to ".$args{target},$args{nodes}->[0]);
+}
 sub migrate_callback {
     my $task = shift;
     my $parms = shift;
     my $state = $task->info->state->val;
-    if ($state eq 'success') {
+    if (not $parms->{skiptodeadsource} and $state eq 'success') {
         my $vmtab = xCAT::Table->new('vm');
         $vmtab->setNodeAttribs($parms->{node},{host=>$parms->{target}});
         sendmsg("migrated to ".$parms->{target},$parms->{node});
+    } elsif($parms->{offline}) { #try a forceful RegisterVM instead
+        my $target = $parms->{target};
+        my $hostview = $hyphash{$target}->{conn}->find_entity_view(view_type=>'VirtualMachine',properties=>['config.name'],filter=>{name=>$parms->{node}});
+   if ($hostview) { #this means vcenter still has it in inventory, but on a dead node...
+                    #unfortunately, vcenter won't give up the old one until we zap the dead hypervisor
+                    #also unfortunately, it doesn't make it easy to find said hypervisor..
+        $hostview = $hyphash{$parms->{src}}->{conn}->get_view(mo_ref=>$hyphash{$parms->{src}}->{deletionref});
+       	$task = $hostview->Destroy_Task();
+        $running_tasks{$task}->{task} = $task;
+        $running_tasks{$task}->{callback} = \&migrate_callback;
+        $running_tasks{$task}->{conn} = $hyphash{$target}->{vcenter}->{conn};
+        $running_tasks{$task}->{data} = { offline=>1, src=>$parms->{src}, node=>$parms->{node}, target=>$target, skiptodeadsource=>1 };
+	} else { #it is completely gone, attempt a register_vm strategy
+           register_vm($target,$parms->{node},undef,\&migrate_ok,{ nodes => [$parms->{node}], target=>$target, },"failonerror");
+	}
     } else {
         relay_vmware_err($task,"Migrating to ".$parms->{target}." ",$parms->{node});
     }
@@ -695,14 +735,31 @@ sub sendmsg {
 sub actually_migrate {
     my %args = %{shift()};
     my @nodes = @{$args{nodes}};
-    my $target = $args{target};
+    my $target;
     my $hyp = $args{hyp};
     my $vcenter = $args{vcenter};
-    if ($vcenterhash{$vcenter}->{$hyp} eq 'bad' or $vcenterhash{$vcenter}->{$target} eq 'bad') {
+    my $offline;
+    @ARGV=@{$args{exargs}};
+    unless (GetOptions(
+        'f' => \$offline,
+        )) {
+        sendmsg([1,"Error parsing arguments"]);
+        return;
+    }
+    if (@ARGV) {
+        $target=shift @ARGV;
+        if (@ARGV) {
+            sendmsg([1,"Unrecognized arguments ".join(' ',@ARGV)]);
+            return;
+        }
+    } else {
+        die "Missing argument"
+    }
+    if ((not $offline and $vcenterhash{$vcenter}->{$hyp} eq 'bad') or $vcenterhash{$vcenter}->{$target} eq 'bad') {
         sendmsg([1,"Unable to migrate ".join(',',@nodes)." to $target due to inability to validate vCenter connectivity"]);
         return;
     }
-    if ($vcenterhash{$vcenter}->{$hyp} eq 'good' and $vcenterhash{$vcenter}->{$target} eq 'good') {
+    if (($offline or $vcenterhash{$vcenter}->{$hyp} eq 'good') and $vcenterhash{$vcenter}->{$target} eq 'good') {
         unless (validate_datastore_prereqs(\@nodes,$target)) {
             sendmsg([1,"Unable to verify storage state on target system"]);
             return;
@@ -716,7 +773,18 @@ sub actually_migrate {
             $hyphash{$target}->{pool} = $hyphash{$target}->{conn}->get_view(mo_ref=>$dstview->parent,properties=>['resourcePool'])->resourcePool;
         }
         foreach (@nodes) {
-            my $srcview = $hyphash{$hyp}->{conn}->find_entity_view(view_type=>'VirtualMachine',properties=>['config.name'],filter=>{name=>$_});
+            my $srcview = $hyphash{$target}->{conn}->find_entity_view(view_type=>'VirtualMachine',properties=>['config.name'],filter=>{name=>$_});
+	    if ($offline and not $srcview) { #we have a request to resurrect the dead..
+           	register_vm($target,$_,undef,\&migrate_ok,{ nodes => [$_], exargs => $args{exargs}, target=>$target, hyp => $args{hyp}, offline => $offline },"failonerror");
+		return;
+	    } elsif (not $srcview) { 
+                $srcview = $hyphash{$hyp}->{conn}->find_entity_view(view_type=>'VirtualMachine',properties=>['config.name'],filter=>{name=>$_});
+	    }
+	    unless ($srcview) {
+		sendmsg([1,"Unable to locate node in vCenter"],$_);
+		next;
+	    }
+		
             my $task = $srcview->MigrateVM_Task(
                 host=>$dstview,
                 pool=>$hyphash{$target}->{pool},
@@ -724,7 +792,7 @@ sub actually_migrate {
             $running_tasks{$task}->{task} = $task;
             $running_tasks{$task}->{callback} = \&migrate_callback;
             $running_tasks{$task}->{hyp} = $args{hyp}; 
-            $running_tasks{$task}->{data} = { node => $_, target=>$target }; 
+            $running_tasks{$task}->{data} = { node => $_, src=>$hyp, target=>$target, offline => $offline }; 
         }
     } else {
         #sendmsg("Waiting for BOTH to be 'good'");
@@ -744,7 +812,8 @@ sub migrate {
         nodes=>$nodes,
         hyp=>$hyp,
         target=>$tgthyp,
-        vcenter=>$vcenter
+        vcenter=>$vcenter,
+        exargs=>$exargs,
     });
 #The following code is now redundant.  validate_vcenter_prereqs is now called well before this point.
 #We do target first to prevent multiple sources to single destination from getting confused
@@ -1228,6 +1297,7 @@ sub register_vm {#Attempt to register existing instance of a VM
     my $disksize = shift;
     my $blockedfun = shift; #a pointer to a blocked function to call on success
     my $blockedargs = shift; #hash reference to call blocked function with
+    my $failonerr = shift;
     my $task;
     validate_network_prereqs([keys %{$hyphash{$hyp}->{nodes}}],$hyp);
     unless (defined $hyphash{$hyp}->{datastoremap} or validate_datastore_prereqs([keys %{$hyphash{$hyp}->{nodes}}],$hyp)) {
@@ -1250,6 +1320,7 @@ sub register_vm {#Attempt to register existing instance of a VM
             disksize => $disksize,
             blockedfun => $blockedfun,
             blockedargs => $blockedargs,
+            errregister=>$failonerr,
             hyp => $hyp
         });
     }
@@ -1262,6 +1333,7 @@ sub register_vm {#Attempt to register existing instance of a VM
             disksize => $disksize,
             blockedfun => $blockedfun,
             blockedargs => $blockedargs,
+            errregister=>$failonerr,
             hyp => $hyp
         };
     }
@@ -1273,6 +1345,8 @@ sub register_vm_callback {
     if (not $task or $task->info->state->val eq 'error') { #TODO: fail for 'rpower' flow, mkvm is too invasive in VMWare to be induced by 'rpower on'
         if (not defined $args->{blockedfun}) {
             mknewvm($args->{node},$args->{disksize},$args->{hyp});
+        } elsif ($args->{errregister}) {
+            relay_vmware_err($task,"",$args->{node});
         } else {
             sendmsg([1,"mkvm must be called before use of this function"],$args->{node});
         }
@@ -1581,6 +1655,13 @@ sub validate_vcenter_prereqs { #Communicate with vCenter and ensure this host is
                 enable_vmotion(hypname=>$hyp,hostview=>$_,conn=>$hyphash{$hyp}->{vcenter}->{conn});
                 $vcenterhash{$vcenter}->{$hyp} = 'good';
                 $depfun->($depargs);
+                if ($_->parent->type eq 'ClusterComputeResource') { #if it is in a cluster, we can directly remove it
+                    $hyphash{$hyp}->{deletionref} = $_->{mo_ref}; 
+                } elsif ($_->parent->type eq 'ComputeResource') { #For some reason, we must delete the container instead
+                    $hyphash{$hyp}->{deletionref} = $_->{parent}; #save off a reference to delete hostview off just in case
+                }
+
+
                 return 1;
             } else {
                 my $ref_to_delete;
@@ -1610,16 +1691,18 @@ sub validate_vcenter_prereqs { #Communicate with vCenter and ensure this host is
         }
     }
     #If still in function, haven't found any likely host entries, make a new one
-    eval {
-        $hyphash{$hyp}->{conn} = Vim->new(service_url=>"https://$hyp/sdk"); #Direct connect to install/check licenses
-    	$hyphash{$hyp}->{conn}->login(user_name=>$hyphash{$hyp}->{username},password=>$hyphash{$hyp}->{password});
-    };
-    if ($@) {
-		sendmsg([1,": Failed to communicate with $hyp"]);
-                 $hyphash{$hyp}->{conn} = undef;
-                return "failed";
+    unless ($hyphash{$hyp}->{offline}) {
+        eval {
+            $hyphash{$hyp}->{conn} = Vim->new(service_url=>"https://$hyp/sdk"); #Direct connect to install/check licenses
+        	$hyphash{$hyp}->{conn}->login(user_name=>$hyphash{$hyp}->{username},password=>$hyphash{$hyp}->{password});
+        };
+        if ($@) {
+    		sendmsg([1,": Failed to communicate with $hyp"]);
+                     $hyphash{$hyp}->{conn} = undef;
+                    return "failed";
+        }
+        validate_licenses($hyp);
     }
-    validate_licenses($hyp);
     addhosttovcenter(undef,{
         depfun => $depfun,
         depargs => $depargs,
@@ -1642,6 +1725,15 @@ sub  addhosttovcenter {
         if ($state eq 'error') {
             die;
         }
+    }
+    if ($hyphash{$args->{hypname}}->{offline}) { #let it stay offline
+        $hypready{$args->{hypname}}=1; #declare readiness
+        #enable_vmotion(hypname=>$args->{hypname},hostview=>$args->{hostview},conn=>$args->{conn});
+        $vcenterhash{$args->{vcenter}}->{$args->{hypname}} = 'good';
+        if (defined $args->{depfun}) { #If a function is waiting for the host connect to go valid, call it
+            $args->{depfun}->($args->{depargs});
+        }
+        return;
     }
     if ($tablecfg{hypervisor}->{$hyp}->[0]->{cluster}) {
         my $cluster = get_clusterview(clustname=>$tablecfg{hypervisor}->{$hyp}->[0]->{cluster},conn=>$hyphash{$hyp}->{vcenter}->{conn});
