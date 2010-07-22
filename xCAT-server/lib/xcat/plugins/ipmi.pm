@@ -2089,7 +2089,7 @@ sub add_fruhash {
             my $err;
             ($err,$fruhash) = parsefru($sessdata->{currfrudata});
             if ($err) {
-                sendmsg([1,"Error reading fru area $err".$sessdata->{currfruid}]);
+                sendmsg([1,":Error reading fru area ".$sessdata->{currfruid}.": $err"]);
                 return;
             }
     }
@@ -2170,6 +2170,9 @@ sub parsefru {
     my $currsize; #store current size
     my $subidx;
     my @currarea;
+    unless (ref $bytes) {
+        return $bytes,undef;
+    }
     unless ($bytes->[0]==1) {
         if ($bytes->[0]==0 or $bytes->[0]==0xff) { #not in spec, but probably unitialized, xCAT probably will rewrite fresh
             return "clear",undef;
