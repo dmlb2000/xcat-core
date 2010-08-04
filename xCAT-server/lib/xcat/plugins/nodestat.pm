@@ -246,7 +246,8 @@ sub process_request_nmap {
           }
           delete $deadnodes{$currnode};
       } elsif ($currnode) {
-          if (/^MAC/) {
+          #if (/^MAC/) {  #oops not all nmap records end with MAC
+          if (/^$/) {     #search for blank line instead
               my $status = join ',',sort keys %states ;
               unless ($status or ($installquerypossible and $status = installer_query($currnode))) { #pingable, but no *clue* as to what the state may be
                  push @nodesetnodes,$currnode; #Aggregate call to nodeset
