@@ -325,7 +325,9 @@ sub process_request {
         my @hypes = keys %hyphash;
         $tablecfg{prodkey} = $keytab->getNodesAttribs(\@hypes,[qw/product key/]);
     }
-	foreach my $hyp (sort(keys %hyphash)){
+    my $hyp;
+    my %needvcentervalidation;
+	foreach $hyp (sort(keys %hyphash)){
 		#if($pid == 0){
         if ($viavcenter or (defined $tablecfg{hypervisor}->{$hyp}->[0]->{mgr} and not $tablecfg{hypervisor}->{$hyp}->[0]->{preferdirect})) {
 	    $viavcenterbyhyp->{$hyp}=1;
@@ -348,12 +350,8 @@ sub process_request {
             }
             $hyphash{$hyp}->{conn} = $vcenterhash{$hyphash{$hyp}->{vcenter}->{name}}->{conn};
             $hyphash{$hyp}->{vcenter}->{conn} = $vcenterhash{$hyphash{$hyp}->{vcenter}->{name}}->{conn};
-            if (validate_vcenter_prereqs($hyp, \&declare_ready, {
-                hyp=>$hyp,
-                vcenter=>$vcenter
-                }) eq "failed") {
-                $hypready{$hyp} = -1;
-            }
+            $needvcentervalidation{$hyp}=$vcenter;
+            $vcenterhash{$vcenter}->{allhyps}->{$hyp}=1;
         } else {
             eval { 
               $hyphash{$hyp}->{conn} = Vim->new(service_url=>"https://$hyp/sdk");
@@ -371,6 +369,18 @@ sub process_request {
 		#	$esx_comm_pids{$pid} = 1;
 		#}
 	}
+    foreach $hyp (keys %needvcentervalidation) {
+        my $vcenter = $needvcentervalidation{$hyp};
+        if (not defined $vcenterhash{$vcenter}->{hostviews}) {
+           populate_vcenter_hostviews($vcenter);
+        }
+        if (validate_vcenter_prereqs($hyp, \&declare_ready, {
+                hyp=>$hyp,
+                vcenter=>$vcenter
+                }) eq "failed") {
+                $hypready{$hyp} = -1;
+        }
+    }
     while (grep { $_ == 0 } values %hypready) {
         wait_for_tasks();
         sleep (1); #We'll check back in every second.  Unfortunately, we have to poll since we are in web service land
@@ -428,7 +438,7 @@ sub do_cmd {
     my $command = shift;
     my @exargs = @_;
     if ($command eq 'rpower') {
-        generic_vm_operation(['config.name','config','runtime.powerState','runtime.host'],\&power,@exargs);
+        generic_vm_operation(['config.name','config.guestId','config.hardware.memoryMB','config.hardware.numCPU','runtime.powerState','runtime.host'],\&power,@exargs);
     } elsif ($command eq 'rmvm') {
         generic_vm_operation(['config.name','runtime.powerState','runtime.host'],\&rmvm,@exargs);
     } elsif ($command eq 'rsetboot') {
@@ -489,7 +499,7 @@ sub connecthost_callback {
     if ($state eq "success") {
         $hypready{$args->{hypname}}=1; #declare readiness
         enable_vmotion(hypname=>$args->{hypname},hostview=>$args->{hostview},conn=>$args->{conn});
-        $vcenterhash{$args->{vcenter}}->{$args->{hypname}} = 'good';
+        $vcenterhash{$args->{vcenter}}->{goodhyps}->{$args->{hypname}} = 1;
         if (defined $args->{depfun}) { #If a function is waiting for the host connect to go valid, call it
             $args->{depfun}->($args->{depargs});
         }
@@ -522,7 +532,7 @@ sub connecthost_callback {
         }
         sendmsg([1,$error]); #,$node);
         $hypready{$args->{hypname}} = -1; #Impossible for this hypervisor to ever be ready
-        $vcenterhash{$args->{vcenter}}->{$args->{hypname}} = 'bad';
+        $vcenterhash{$args->{vcenter}}->{badhyps}->{$args->{hypname}} = 1;
     }
 }
 
@@ -777,11 +787,11 @@ sub actually_migrate {
     } else {
         die "Missing argument"
     }
-    if ((not $offline and $vcenterhash{$vcenter}->{$hyp} eq 'bad') or $vcenterhash{$vcenter}->{$target} eq 'bad') {
+    if ((not $offline and $vcenterhash{$vcenter}->{badhyps}->{$hyp}) or $vcenterhash{$vcenter}->{badhyps}->{$target}) {
         sendmsg([1,"Unable to migrate ".join(',',@nodes)." to $target due to inability to validate vCenter connectivity"]);
         return;
     }
-    if (($offline or $vcenterhash{$vcenter}->{$hyp} eq 'good') and $vcenterhash{$vcenter}->{$target} eq 'good') {
+    if (($offline or $vcenterhash{$vcenter}->{goodhyps}->{$hyp}) and $vcenterhash{$vcenter}->{goodhyps}->{$target}) {
         unless (validate_datastore_prereqs(\@nodes,$target)) {
             sendmsg([1,"Unable to verify storage state on target system"]);
             return;
@@ -937,7 +947,7 @@ sub getreconfigspec {
     my %args = @_;
     my $node = $args{node};
     my $vmview = $args{view};
-    my $currid=$args{view}->config->guestId();
+    my $currid=$args{view}->{'config.guestId'};
     my $rightid=getguestid($node);
     my %conargs;
     my $reconfigneeded=0;
@@ -947,7 +957,7 @@ sub getreconfigspec {
     }
     my $newmem;
     if ($newmem = getUnits($tablecfg{vm}->{$node}->[0]->{memory},"M",1048576)) {
-        my $currmem = $vmview->config->hardware->memoryMB;
+        my $currmem = $vmview->{'config.hardware.memoryMB'};
         if ($newmem ne $currmem) {
             $conargs{memoryMB} = $newmem;
             $reconfigneeded=1;
@@ -955,7 +965,7 @@ sub getreconfigspec {
     }
     my $newcpus;
     if ($newcpus = $tablecfg{vm}->{$node}->[0]->{cpus}) {
-        my $currncpu = $vmview->config->hardware->numCPU;
+        my $currncpu = $vmview->{'config.hardware.numCPU'};
         if ($newcpus ne $currncpu) {
             $conargs{numCPUs} = $newcpus;
             $reconfigneeded=1;
@@ -975,7 +985,7 @@ sub power {
     my $hyp = $args{hyp};
     my $pretendop = $args{pretendop}; #to pretend a system was on for reset or boot when we have to turn it off internally for reconfig
     if (not defined $args{vmview}) { #attempt one refresh
-        $args{vmview} = $hyphash{$hyp}->{conn}->find_entity_view(view_type => 'VirtualMachine',properties=>['config.name','config','runtime.powerState'],filter=>{name=>$node});
+        $args{vmview} = $hyphash{$hyp}->{conn}->find_entity_view(view_type => 'VirtualMachine',properties=>['config.name','config.guestId','config.hardware.memoryMB','config.hardware.numCPU','runtime.powerState'],filter=>{name=>$node});
     }
     @ARGV = @{$args{exargs}}; #for getoptions;
     my $forceon;
@@ -1099,15 +1109,25 @@ sub generic_vm_operation { #The general form of firing per-vm requests to ESX hy
     my $hyp; 
     my $vmviews;
     my %vcviews; #views populated once per vcenter server for improved performance
+    my $node;
+    foreach $hyp (keys %hyphash) {
+        if ($viavcenterbyhyp->{$hyp}) {
+    	    foreach $node (sort (keys %{$hyphash{$hyp}->{nodes}})){
+                $vcenterhash{$hyphash{$hyp}->{vcenter}->{name}}->{vms}->{$node}=1;
+            }
+        }
+    }
+    my $currentvcenter;
+    foreach $currentvcenter (keys %vcenterhash) {
+        #retrieve all vm views in one gulp
+        my $vmsearchstring = join(")|(",keys %{$vcenterhash{$currentvcenter}->{vms}});
+        $vmsearchstring = '^(('.$vmsearchstring.'))(\z|\.)';
+        my $regex = qr/$vmsearchstring/o;
+        $vcviews{$currentvcenter} = $vcenterhash{$currentvcenter}->{conn}->find_entity_views(view_type => 'VirtualMachine',properties=>$properties,filter=>{'config.name'=>$regex});
+    }
     foreach $hyp (keys %hyphash) {
         if ($viavcenterbyhyp->{$hyp}) {
             if ($vcviews{$hyphash{$hyp}->{vcenter}->{name}}) { next; }
-            my @localvcviews=();
-            my $node;
-    	    foreach $node (sort (keys %{$hyphash{$hyp}->{nodes}})){
-                push @localvcviews,$hyphash{$hyp}->{conn}->find_entity_view(view_type => 'VirtualMachine',properties=>$properties,filter=>{'config.name'=>qr/^$node/});
-            }
-            $vcviews{$hyphash{$hyp}->{vcenter}->{name}} = \@localvcviews;
             #$vcviews{$hyphash{$hyp}->{vcenter}->{name}} = $hyphash{$hyp}->{conn}->find_entity_views(view_type => 'VirtualMachine',properties=>$properties);
             foreach (@{$vcviews{$hyphash{$hyp}->{vcenter}->{name}}}) {
                 my $node = $_->{'config.name'};
@@ -1115,8 +1135,8 @@ sub generic_vm_operation { #The general form of firing per-vm requests to ESX hy
                     $node =~ s/\..*//; #try the short name;
                 }
                 if (defined $tablecfg{vm}->{$node}) { #see if the host pointer requires a refresh 
-                    my $host = $hyphash{$hyp}->{conn}->get_view(mo_ref=>$_->{'runtime.host'});
-                    $host = $host->summary->config->name;
+                    my $host = $hyphash{$hyp}->{conn}->get_view(mo_ref=>$_->{'runtime.host'},properties=>['summary.config.name']);
+                    $host = $host->{'summary.config.name'};
                     if ( $tablecfg{vm}->{$node}->[0]->{host} eq "$host" ) { next; }
                     my $newnhost = inet_aton($host);
                     my $oldnhost = inet_aton($tablecfg{vm}->{$node}->[0]->{host});
@@ -1136,7 +1156,6 @@ sub generic_vm_operation { #The general form of firing per-vm requests to ESX hy
                     } #else {
                       #  $vmtab->setNodeAttribs($node,{host=>$host});
                     #}
-
                 }
             }
         }
@@ -1643,6 +1662,55 @@ sub declare_ready {
     $hypready{$args{hyp}}=1;
 }
 
+sub populate_vcenter_hostviews {
+    my $vcenter = shift;
+    my @hypervisors;
+    my %nametohypmap;
+    my $iterations=1;
+    if ($usehostnamesforvcenter and $usehostnamesforvcenter !~ /no/i) {
+        $iterations=2; #two passes possible
+        my $hyp;
+        foreach $hyp (keys %{$vcenterhash{$vcenter}->{allhyps}}) {
+
+            if ($tablecfg{hosts}->{$hyp}->[0]->{hostnames}) {
+                $nametohypmap{$tablecfg{hosts}->{$hyp}->[0]->{hostnames}}=$hyp;
+            }
+        }
+        @hypervisors = keys %nametohypmap;
+    } else {
+        @hypervisors = keys %{$vcenterhash{$vcenter}->{allhyps}};
+    }
+    while ($iterations and scalar(@hypervisors)) {
+        my $hosts = join(")|(",@hypervisors);
+        $hosts = '^(('.$hosts.'))(\z|\.)';
+        my $search = qr/$hosts/o;
+        my @hypviews = @{$vcenterhash{$vcenter}->{conn}->find_entity_views(view_type=>'HostSystem',properties=>['summary.config.name','summary.runtime.connectionState','runtime.inMaintenanceMode','parent','configManager'],filter=>{'summary.config.name'=>$search})};
+        foreach (@hypviews) {
+            my $hypname = $_->{'summary.config.name'};
+            if ($vcenterhash{$vcenter}->{allhyps}->{$hypname}) { #simplest case, config.name is exactly the same as node name
+                $vcenterhash{$vcenter}->{hostviews}->{$hypname} = $_;
+            } elsif ($nametohypmap{$hypname}) { #second case, there is a name mapping this to a real name
+                $vcenterhash{$vcenter}->{hostviews}->{$nametohypmap{$hypname}} = $_;
+            } else { #name as-is doesn't work, start stripping domain and hope for the best
+                $hypname =~ s/\..*//;
+                if ($vcenterhash{$vcenter}->{allhyps}->{$hypname}) { #shortname is a node
+                    $vcenterhash{$vcenter}->{hostviews}->{$hypname} = $_;
+                } elsif ($nametohypmap{$hypname}) { #alias for node
+                    $vcenterhash{$vcenter}->{hostviews}->{$nametohypmap{$hypname}} = $_;
+                }
+            }
+        }
+        $iterations--;
+        @hypervisors=();
+        if ($usehostnamesforvcenter and $usehostnamesforvcenter !~ /no/i) { #check for hypervisors by native node name if missed above
+            foreach my $hyp (keys %{$vcenterhash{$vcenter}->{allhyps}}) {
+                unless ($vcenterhash{$vcenter}->{hostviews}->{$hyp}) {
+                    push @hypervisors,$hyp;
+                }
+            }
+        }
+    }
+}
 sub validate_vcenter_prereqs { #Communicate with vCenter and ensure this host is added correctly to a vCenter instance when an operation requires it
     my $hyp = shift;
     my $depfun = shift;
@@ -1677,15 +1745,12 @@ sub validate_vcenter_prereqs { #Communicate with vCenter and ensure this host is
         force=>1,
         );
     my $hview;
-    $hview = $hyphash{$hyp}->{vcenter}->{conn}->find_entity_view(view_type=>'HostSystem',properties=>['summary.config.name','summary.runtime.connectionState','runtime.inMaintenanceMode','parent','configManager'],filter=>{'summary.config.name'=>qr/^$hyp(?:\.|\z)/});
-    unless ($hview) {
-         $hview = $hyphash{$hyp}->{vcenter}->{conn}->find_entity_view(view_type=>'HostSystem',properties=>['summary.config.name','summary.runtime.connectionState','runtime.inMaintenanceMode','parent','configManager'],filter=>{'summary.config.name'=>qr/^$name(?:\.|\z)/});
-    }
+    $hview = $vcenterhash{$vcenter}->{hostviews}->{$hyp};
     if ($hview) { 
         if ($hview->{'summary.config.name'} =~ /^$hyp(?:\.|\z)/ or $hview->{'summary.config.name'} =~ /^$name(?:\.|\z)/) { #Looks good, call the dependent function after declaring the state of vcenter to hypervisor as good
             if ($hview->{'summary.runtime.connectionState'}->val eq 'connected') {
                 enable_vmotion(hypname=>$hyp,hostview=>$hview,conn=>$hyphash{$hyp}->{vcenter}->{conn});
-                $vcenterhash{$vcenter}->{$hyp} = 'good';
+                $vcenterhash{$vcenter}->{goodhyps}->{$hyp} = 1;
                 $depfun->($depargs);
                 if ($hview->parent->type eq 'ClusterComputeResource') { #if it is in a cluster, we can directly remove it
                     $hyphash{$hyp}->{deletionref} = $hview->{mo_ref}; 
@@ -1760,7 +1825,7 @@ sub  addhosttovcenter {
     if ($hyphash{$args->{hypname}}->{offline}) { #let it stay offline
         $hypready{$args->{hypname}}=1; #declare readiness
         #enable_vmotion(hypname=>$args->{hypname},hostview=>$args->{hostview},conn=>$args->{conn});
-        $vcenterhash{$args->{vcenter}}->{$args->{hypname}} = 'good';
+        $vcenterhash{$args->{vcenter}}->{goodhyps}->{$args->{hypname}} = 1;
         if (defined $args->{depfun}) { #If a function is waiting for the host connect to go valid, call it
             $args->{depfun}->($args->{depargs});
         }
