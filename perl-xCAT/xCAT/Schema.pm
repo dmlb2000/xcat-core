@@ -717,14 +717,16 @@ nimimage  => {
  },
   },
 performance => {
-    cols => [qw(timestamp node attrname attrvalue)],
+    cols => [qw(timestamp node attrname attrvalue comments disable)],
     keys => [qw(timestamp node attrname)],
     table_desc => 'Describes the system performance every interval unit of time.',
  descriptions => {
    timestamp => 'The time at which the metric was captured.',
    node => 'The node name.',
    attrname => 'The metric name.',
-   attrvalue => 'The metric value.'
+   attrvalue => 'The metric value.',
+   comments => 'Any user-written notes.',
+   disable => "Set to 'yes' or '1' to comment out this row.",
  },
   },
 
