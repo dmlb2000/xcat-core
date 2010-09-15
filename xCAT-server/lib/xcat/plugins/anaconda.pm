@@ -1143,7 +1143,7 @@ sub getplatform {
 # we do this sparingly...  We don't like tons of hits
 # to the database.
 
-sub subVars()
+sub subVars
 {
     my $dir = shift;
     my $node = shift;
