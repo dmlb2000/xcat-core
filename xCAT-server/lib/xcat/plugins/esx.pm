@@ -75,6 +75,7 @@ sub handled_commands{
                 chvm => 'nodehm:mgt',
         lsvm => 'hypervisor:type',
 		rmhypervisor => 'hypervisor:type',
+        rshutdown => "nodetype:os=(esxi.*)",
 		#lsvm => 'nodehm:mgt', not really supported yet
 	};
 }
@@ -136,7 +137,7 @@ sub preprocess_request {
 
 	my $vmtabhash = $vmtab->getNodesAttribs($noderange,['host']);
 	foreach my $node (@$noderange){
-        if ($command eq "rmhypervisor" or $command eq 'lsvm') {
+        if ($command eq "rmhypervisor" or $command eq 'lsvm' or $command eq 'rshutdown') {
             $hyp_hash{$node}{nodes} = [$node];
         } else {
         my $ent = $vmtabhash->{$node}->[0];
@@ -451,6 +452,8 @@ sub do_cmd {
         generic_vm_operation(['config.name','config','runtime.host'],\&inv,@exargs);
     } elsif ($command eq 'rmhypervisor') {
         generic_hyp_operation(\&rmhypervisor,@exargs);
+    } elsif ($command eq 'rshutdown') {
+        generic_hyp_operation(\&rshutdown,@exargs);
     } elsif ($command eq 'lsvm') {
         generic_hyp_operation(\&lsvm,@exargs);
     } elsif ($command eq 'mkvm') {
@@ -1588,6 +1591,41 @@ sub lsvm {
     foreach (@$vms) {
         my $vmv = $hyphash{$hyp}->{conn}->get_view(mo_ref=>$_);
         sendmsg($vmv->name,$hyp);
+    }
+    return;
+}
+
+sub rshutdown { #TODO: refactor with next function too
+    my %args = @_;
+    my $hyp = $args{hyp};
+    $hyphash{$hyp}->{hostview} = get_hostview(hypname=>$hyp,conn=>$hyphash{$hyp}->{conn}); #,properties=>['config','configManager']); 
+    if (defined $hyphash{$hyp}->{hostview}) {
+        my $task = $hyphash{$hyp}->{hostview}->EnterMaintenanceMode_Task(timeout=>0);
+        $running_tasks{$task}->{task} = $task;
+        $running_tasks{$task}->{callback} = \&rshutdown_inmaintenance;
+        $running_tasks{$task}->{hyp} = $args{hyp}; 
+        $running_tasks{$task}->{data} = { node => $hyp }; 
+    }
+    return;
+}
+
+sub rshutdown_inmaintenance {
+    my $task = shift;
+    my $parms = shift;
+    my $state = $task->info->state->val;
+    my $node = $parms->{node};
+    my $intent = $parms->{successtext};
+    if ($state eq 'success') {
+        my $hyp = $parms->{node};
+        if (defined $hyphash{$hyp}->{hostview}) {
+            my $task = $hyphash{$hyp}->{hostview}->ShutdownHost_Task(force=>0);
+            $running_tasks{$task}->{task} = $task;
+            $running_tasks{$task}->{callback} = \&generic_task_callback;
+            $running_tasks{$task}->{hyp} = $hyp;
+            $running_tasks{$task}->{data} = { node => $hyp, successtext => "shutdown initiated" };
+        }
+    } elsif ($state eq 'error') {
+        relay_vmware_err($task,"",$node);
     }
     return;
 }
