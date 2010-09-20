@@ -686,9 +686,9 @@ sub chvm {
 	#sendmsg("reconfigspec = ".Dumper($reconfigspec));
 	my $task = $vmview->ReconfigVM_Task(spec=>$reconfigspec);
 	$running_tasks{$task}->{task} = $task;
-	$running_tasks{$task}->{callback} = \&generic_task_callback;
+	$running_tasks{$task}->{callback} = \&chvm_task_callback;
 	$running_tasks{$task}->{hyp} = $hyp;
-	$running_tasks{$task}->{data} = { node => $node, successtext => "node successfully changed" };
+	$running_tasks{$task}->{data} = { node => $node, successtext => "node successfully changed",cpus=>$cpuCount,mem=>$memory };
 
 }
 
@@ -1033,6 +1033,29 @@ sub poweron_task_callback {
     }
 
 }
+sub chvm_task_callback {
+    my $task = shift;
+    my $parms = shift;
+    my $state = $task->info->state->val;
+    my $node = $parms->{node};
+    my $intent = $parms->{successtext};
+    if ($state eq 'success') {
+        my $updatehash;
+        if ($parms->{cpus} and  $tablecfg{vm}->{$node}->[0]->{cpus}) { #need to update
+            $updatehash->{cpus}=$parms->{cpus};
+        }
+        if ($parms->{mem} and  $tablecfg{vm}->{$node}->[0]->{memory}) { #need to update
+            $updatehash->{memory}=$parms->{mem};
+        }
+        if ($updatehash) {
+            my $vmtab = xCAT::Table->new('vm',-create=>1);
+            $vmtab->setNodeAttribs($node,$updatehash);
+        }
+        xCAT::SvrUtils::sendmsg($intent, $output_handler,$node);
+    } elsif ($state eq 'error') {
+        relay_vmware_err($task,"",$node);
+    }
+}
 sub generic_task_callback {
     my $task = shift;
     my $parms = shift;
@@ -1265,7 +1288,7 @@ sub getreconfigspec {
         $conargs{guestId}=$rightid;
     }
     my $newmem;
-    if ($newmem = getUnits($tablecfg{vm}->{$node}->[0]->{memory},"M",1048576)) {
+    if ($tablecfg{vm}->{$node}->[0]->{memory} and $newmem = getUnits($tablecfg{vm}->{$node}->[0]->{memory},"M",1048576)) {
         my $currmem = $vmview->{'config.hardware.memoryMB'};
         if ($newmem ne $currmem) {
             $conargs{memoryMB} = $newmem;
@@ -1273,7 +1296,7 @@ sub getreconfigspec {
         }
     }
     my $newcpus;
-    if ($newcpus = $tablecfg{vm}->{$node}->[0]->{cpus}) {
+    if ($tablecfg{vm}->{$node}->[0]->{cpus} and $newcpus = $tablecfg{vm}->{$node}->[0]->{cpus}) {
         my $currncpu = $vmview->{'config.hardware.numCPU'};
         if ($newcpus ne $currncpu) {
             $conargs{numCPUs} = $newcpus;
