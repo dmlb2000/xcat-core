@@ -1374,6 +1374,13 @@ sub power {
                 } else {
                     sendmsg($currstat,$node);
                 }
+            } elsif ($subcmd =~ /softoff/) {
+                if ($currstat eq 'on') {
+                    $args{vmview}->ShutdownGuest();
+                    xCAT::SvrUtils::sendmsg("softoff", $output_handler,$node);
+                } else {
+                    xCAT::SvrUtils::sendmsg($currstat, $output_handler,$node);
+                }
             } elsif ($subcmd =~ /off/) {
                 if ($currstat eq 'on') {
                     $task = $args{vmview}->PowerOffVM_Task();
