@@ -1674,8 +1674,12 @@ sub mkvms {
     @ARGV = @{$args{exargs}}; #for getoptions;
     my $disksize;
     require Getopt::Long;
+    my $cpuCount;
+    my $memory;
     GetOptions(
-        'size|s=s' => \$disksize
+        'size|s=s' => \$disksize,
+		"cpus=s"    => \$cpuCount,
+		"mem=s"     => \$memory
         );
     my $node;
     $hyphash{$hyp}->{hostview} = get_hostview(hypname=>$hyp,conn=>$hyphash{$hyp}->{conn}); #,properties=>['config','configManager']); 
@@ -1690,7 +1694,7 @@ sub mkvms {
             sendmsg([1,"Virtual Machine already exists"],$node);
             next;
         } else {
-            register_vm($hyp,$node,$disksize);
+            register_vm($hyp,$node,$disksize,undef,undef,undef,cpus=>$cpuCount,memory=>$memory);
         }
     }
     my @dhcpnodes;
@@ -1744,6 +1748,7 @@ sub register_vm {#Attempt to register existing instance of a VM
     my $blockedfun = shift; #a pointer to a blocked function to call on success
     my $blockedargs = shift; #hash reference to call blocked function with
     my $failonerr = shift;
+    my %args=@_; #ok, went overboard with positional arguments, from now on, named arguments
     my $task;
     validate_network_prereqs([keys %{$hyphash{$hyp}->{nodes}}],$hyp);
     unless (defined $hyphash{$hyp}->{datastoremap} or validate_datastore_prereqs([keys %{$hyphash{$hyp}->{nodes}}],$hyp)) {
@@ -1767,6 +1772,8 @@ sub register_vm {#Attempt to register existing instance of a VM
             blockedfun => $blockedfun,
             blockedargs => $blockedargs,
             errregister=>$failonerr,
+            cpus=>$args{cpus},
+            memory=>$args{memory},
             hyp => $hyp
         });
     }
@@ -1780,6 +1787,8 @@ sub register_vm {#Attempt to register existing instance of a VM
             blockedfun => $blockedfun,
             blockedargs => $blockedargs,
             errregister=>$failonerr,
+            cpus=>$args{cpus},
+            memory=>$args{memory},
             hyp => $hyp
         };
     }
@@ -1790,7 +1799,7 @@ sub register_vm_callback {
     my $args = shift;
     if (not $task or $task->info->state->val eq 'error') { #TODO: fail for 'rpower' flow, mkvm is too invasive in VMWare to be induced by 'rpower on'
         if (not defined $args->{blockedfun}) {
-            mknewvm($args->{node},$args->{disksize},$args->{hyp});
+            mknewvm($args->{node},$args->{disksize},$args->{hyp},$args);
         } elsif ($args->{errregister}) {
             relay_vmware_err($task,"",$args->{node});
         } else {
@@ -1831,8 +1840,8 @@ sub mknewvm {
         my $node=shift;
         my $disksize=shift;
         my $hyp=shift;
-#TODO: above
-        my $cfg = build_cfgspec($node,$hyphash{$hyp}->{datastoremap},$hyphash{$hyp}->{nets},$disksize,$hyp);
+        my $otherargs=shift;
+        my $cfg = build_cfgspec($node,$hyphash{$hyp}->{datastoremap},$hyphash{$hyp}->{nets},$disksize,$hyp,$otherargs);
         my $task = $hyphash{$hyp}->{vmfolder}->CreateVM_Task(config=>$cfg,pool=>$hyphash{$hyp}->{pool},host=>$hyphash{$hyp}->{hostview});
         $running_tasks{$task}->{task} = $task;
         $running_tasks{$task}->{callback} = \&mkvm_callback;
@@ -1897,13 +1906,33 @@ sub build_cfgspec {
     my $netmap = shift;
     my $disksize = shift;
     my $hyp = shift;
+    my $otherargs=shift;
     my $memory;
     my $ncpus;
-    unless ($memory = getUnits($tablecfg{vm}->{$node}->[0]->{memory},"M",1048576)) {
+    my $updatehash;
+    if ($otherargs->{memory}) {
+        $memory=getUnits($otherargs->{memory},"M",1048576);
+        if ($tablecfg{vm}->{$node}->[0]->{memory}) {
+            $updatehash->{memory}=$memory;
+        }
+    } elsif ($tablecfg{vm}->{$node}->[0]->{memory}) {
+        $memory = getUnits($tablecfg{vm}->{$node}->[0]->{memory},"M",1048576);
+    } else {
         $memory = 512;
     }
-    unless ($ncpus = $tablecfg{vm}->{$node}->[0]->{cpus}) {
+    if ($otherargs->{cpus}) {
+        $ncpus=$otherargs->{cpus};
+        if ($tablecfg{vm}->{$node}->[0]->{cpus}) {
+            $updatehash->{cpus}=$ncpus;
+        }
+    } elsif ($tablecfg{vm}->{$node}->[0]->{cpus}) {
+        $ncpus = $tablecfg{vm}->{$node}->[0]->{cpus};
+    } else {
         $ncpus = 1;
+    }
+    if ($updatehash) {
+        my $vmtab = xCAT::Table->new('vm',-create=>1);
+        $vmtab->setNodeAttribs($node,$updatehash);
     }
     my @devices;
     $currkey=0;
@@ -2687,7 +2716,7 @@ sub build_more_info{
     if (defined($ent->{mpa})) { push @{$mpa_hash{$ent->{mpa}}{nodes}}, $node;}
     else {
       $callback->({data=>["no mpa defined for node $node"]});
-      return @moreinfo;;
+      return @moreinfo;
     }
     if (defined($ent->{id})) { push @{$mpa_hash{$ent->{mpa}}{ids}}, $ent->{id};}
     else { push @{$mpa_hash{$ent->{mpa}}{ids}}, "";}
