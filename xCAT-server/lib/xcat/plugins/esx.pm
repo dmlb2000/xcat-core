@@ -364,7 +364,7 @@ sub process_request {
             }; 
             if ($@) {
 	       $hyphash{$hyp}->{conn} = undef;
-	       sendmsg([1,"Unable to reach $hyp to perform operation"]);
+	       sendmsg([1,"Unable to reach $hyp to perform operation due to $@"]);
                 $hypready{$hyp} = -1;
 	       next;
             }
@@ -2251,7 +2251,7 @@ sub validate_vcenter_prereqs { #Communicate with vCenter and ensure this host is
         	$hyphash{$hyp}->{conn}->login(user_name=>$hyphash{$hyp}->{username},password=>$hyphash{$hyp}->{password});
         };
         if ($@) {
-    		sendmsg([1,": Failed to communicate with $hyp"]);
+    		sendmsg([1,": Failed to communicate with $hyp due to $@"]);
                      $hyphash{$hyp}->{conn} = undef;
                     return "failed";
         }
