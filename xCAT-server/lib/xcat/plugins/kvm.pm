@@ -165,11 +165,13 @@ sub get_storage_pool_by_url {
             $poolobj->build();
             $poolobj->create();
         }
+        $poolobj->refresh();
         return $poolobj; 
     }
     $poolobj = $virtconn->define_storage_pool(build_pool_xml($url,$mounthost));
     $poolobj->build();
     $poolobj->create();
+    $poolobj->refresh();
     return $poolobj;
 }
 
