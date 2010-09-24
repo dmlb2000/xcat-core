@@ -1695,6 +1695,12 @@ sub clone_vm_from_master {
     fixup_clone_network(mastername=>$mastername,mastertableentry=>$masteref,kvmmastertableentry=>$kvmmasteref,xmlinprogress=>$newnodexml);
     #ok, now the fun part, storage...
     my $disk;
+    if ($masteref->{storage}) {
+        foreach (split /,/,$masteref->{storage}) {
+                s/=.*//;
+                get_storage_pool_by_url($_);
+        }
+    }
     my $url;
     if ($confdata->{vm}->{$node}->[0]->{storage}) {
         unless ($confdata->{vm}->{$node}->[0]->{storage} =~ /^nfs:/) {
