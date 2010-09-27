@@ -98,6 +98,16 @@ my $vmtab;
 my $kvmdatatab;
 
 
+sub get_path_for_pool {
+    my $poolobj =shift;
+    my $poolxml = $poolobj->get_xml_description();
+    my $pooldom = $parser->parse_string($poolxml);
+    my @paths = $pooldom->findnodes("/pool/target/path/text()");
+    if (scalar @paths != 1) {
+        return undef;
+    }
+    return $paths[0]->data;
+}
 sub build_pool_xml {
     my $url = shift;
     my $mounthost = shift;
@@ -303,7 +313,9 @@ sub fixbootorder {
             unless ($currdev and $currdev->getAttribute("dev") eq $_) {
                 $needfixin=1;
             }
-            push @oldbootdevs,$currdev;
+            if ($currdev) {
+                push @oldbootdevs,$currdev;
+            }
         }
         if (scalar(@bootdevs)) {
             $needfixin=1;
@@ -1152,6 +1164,7 @@ sub invstorage {
             if ($info{allocation} and $info{capacity}) {
                 $size = $info{allocation};
                 $size = $size/1048576; #convert to MB
+                $size = sprintf("%.3f",$size);
                 $size .= "/".($info{capacity}/1048576);
             }
         }
@@ -1510,8 +1523,15 @@ sub promote_vm_to_master {
     my $target=$args{target};
     my $force=$args{force};
     my $detach=$args{detach};
+    if ($target !~ m!://!) { #if not a url, use same place as source
+        my $sourcedir = $confdata->{vm}->{$node}->[0]->{storage};
+        $sourcedir =~ s/=.*//;
+        $sourcedir =~ s/,.*//;
+        $sourcedir =~ s!/\z!!;
+        $target = $sourcedir."/".$target;
+    }
     unless ($target =~ /^nfs:\/\//) {
-        xCAT::SvrUtils::sendmsg([1,"KVM plugin only has nfs://<server>/<path>/<mastername> support at this moment"], $callback,$node);
+        xCAT::SvrUtils::sendmsg([1,"KVM plugin only has nfs://<server>/<path>/<mastername> support for cloning at this moment"], $callback,$node);
         return;
     }
     my $dom;
@@ -1539,7 +1559,7 @@ sub promote_vm_to_master {
         $tmpnod->setData("none"); #get rid of the VM specific uuid
     }
 
-    $target =~ /^(.*)\/([^\/]*)\z/;
+    $target =~ m!^(.*)/([^/]*)\z!;
     my $directory=$1;
     my $mastername=$2;
 
@@ -1582,7 +1602,9 @@ sub promote_vm_to_master {
             return;
         }
         $volclonemap{$filename}=[$sourcevol,$volname];
-        $filename =~ s/(.*\/)$node\./$1$mastername\./;
+        $filename = get_path_for_pool($poolobj);
+        $filename =~ s!/\z!!;
+        $filename .= '/'.$volname;
         $_->setAttribute(file=>$filename);
     }
     foreach (keys %volclonemap) {
