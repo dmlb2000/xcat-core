@@ -58,11 +58,12 @@ function loadNodesetPage(tgtNodes) {
 	var method = $('<div></div>');
 	var methodLabel = $('<label for="method">Boot method:</label>');
 	var methodSelect = $('<select id="bootMethod" name="bootMethod"></select>');
-	methodSelect.append('<option value="boot">boot</option>');
-	methodSelect.append('<option value="install">install</option>');
-	methodSelect.append('<option value="iscsiboot">iscsiboot</option>');
-	methodSelect.append('<option value="netboot">netboot</option>');
-	methodSelect.append('<option value="statelite">statelite</option>');
+	methodSelect.append('<option value="boot">boot</option>'
+		+ '<option value="install">install</option>'
+		+ '<option value="iscsiboot">iscsiboot</option>'
+		+ '<option value="netboot">netboot</option>'
+		+ '<option value="statelite">statelite</option>'
+	);
 	method.append(methodLabel);
 	method.append(methodSelect);
 	nodesetForm.append(method);
@@ -71,9 +72,10 @@ function loadNodesetPage(tgtNodes) {
 	var type = $('<div></div>');
 	var typeLabel = $('<label for="type">Boot type:</label>');
 	var typeSelect = $('<select id="bootType" name="bootType"></select>');
-	typeSelect.append('<option value="zvm">zvm</option>');
-	typeSelect.append('<option value="install">pxe</option>');
-	typeSelect.append('<option value="iscsiboot">yaboot</option>');
+	typeSelect.append('<option value="zvm">zvm</option>'
+		+ '<option value="install">pxe</option>'
+		+ '<option value="iscsiboot">yaboot</option>'
+	);
 	type.append(typeLabel);
 	type.append(typeSelect);
 	nodesetForm.append(type);
@@ -128,6 +130,9 @@ function loadNodesetPage(tgtNodes) {
 	 */
 	var okBtn = createButton('Ok');
 	okBtn.bind('click', function(event) {
+		// Remove any warning messages
+		$(this).parent().parent().find('.ui-state-error').remove();
+		
 		// Check state, OS, arch, and profile
 		var ready = true;
 		var inputs = $('#' + tabId + ' input');
@@ -154,11 +159,7 @@ function loadNodesetPage(tgtNodes) {
 			var profile = $('#' + tabId + ' input[name=profile]').val();
 
 			// Disable Ok button
-			$(this).unbind(event);
-			$(this).css( {
-				'background-color' : '#F2F2F2',
-				'color' : '#424242'
-			});
+			$(this).attr('disabled', 'true');
 
 			/**
 			 * (1) Set the OS, arch, and profile
@@ -182,7 +183,9 @@ function loadNodesetPage(tgtNodes) {
 			// Show status bar
 			statBar.show();
 		} else {
-			alert('You are missing some values');
+			// Show warning message
+			var warn = createWarnBar('You are missing some values');
+			warn.prependTo($(this).parent().parent());
 		}
 	});
 	nodesetForm.append(okBtn);

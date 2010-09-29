@@ -141,3 +141,12 @@ fspPlugin.prototype.loadProvisionPage = function(tabId) {
 fspPlugin.prototype.loadResources = function() {
 
 };
+
+/**
+ * Add node range
+ * 
+ * @return Nothing
+ */
+fspPlugin.prototype.addNode = function() {
+	
+};

@@ -141,3 +141,12 @@ bladePlugin.prototype.loadProvisionPage = function(tabId) {
 bladePlugin.prototype.loadResources = function() {
 
 };
+
+/**
+ * Add node range
+ * 
+ * @return Nothing
+ */
+bladePlugin.prototype.addNode = function() {
+	
+};

@@ -104,6 +104,9 @@ function loadNetbootPage(tgtNodes) {
 	 */
 	var okBtn = createButton('Ok');
 	okBtn.bind('click', function(event) {
+		// Remove any warning messages
+		$(this).parent().parent().find('.ui-state-error').remove();
+		
 		// Check inputs
 		var ready = true;
 		var inputs = $("#" + newTabId + " input[type='text']:visible");
@@ -148,11 +151,7 @@ function loadNetbootPage(tgtNodes) {
 			}
 
 			// Disable Ok button
-			$(this).unbind(event);
-			$(this).css( {
-				'background-color' : '#F2F2F2',
-				'color' : '#424242'
-			});
+			$(this).attr('disabled', 'true');
 
 			/**
 			 * (1) Boot to network
@@ -173,7 +172,9 @@ function loadNetbootPage(tgtNodes) {
 			// Show status bar
 			statusBar.show();
 		} else {
-			alert('You are missing some values');
+			// Show warning message
+			var warn = createWarnBar('You are missing some values');
+			warn.prependTo($(this).parent().parent());
 		}
 	});
 	netbootForm.append(okBtn);

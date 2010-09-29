@@ -194,3 +194,12 @@ hmcPlugin.prototype.loadProvisionPage = function(tabId) {
 hmcPlugin.prototype.loadResources = function() {
 
 };
+
+/**
+ * Add node range
+ * 
+ * @return Nothing
+ */
+hmcPlugin.prototype.addNode = function() {
+	
+};

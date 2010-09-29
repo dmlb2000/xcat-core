@@ -141,3 +141,12 @@ ipmiPlugin.prototype.loadProvisionPage = function(tabId) {
 ipmiPlugin.prototype.loadResources = function() {
 
 };
+
+/**
+ * Add node range
+ * 
+ * @return Nothing
+ */
+ipmiPlugin.prototype.addNode = function() {
+	
+};

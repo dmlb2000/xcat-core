@@ -141,3 +141,12 @@ ivmPlugin.prototype.loadProvisionPage = function(tabId) {
 ivmPlugin.prototype.loadResources = function() {
 
 };
+
+/**
+ * Add node range
+ * 
+ * @return Nothing
+ */
+ivmPlugin.prototype.addNode = function() {
+	
+};

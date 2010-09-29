@@ -319,11 +319,26 @@ function createStatusBar(barId) {
  * @return Info bar
  */
 function createInfoBar(msg) {
-	var infoBar = $('<div class="ui-state-highlight ui-corner-all">');
-	var msg = $('<p class="info"><span class="ui-icon ui-icon-info"></span>' + msg + '</p>');
+	var infoBar = $('<div class="ui-state-highlight ui-corner-all"></div>');
+	var msg = $('<p><span class="ui-icon ui-icon-info"></span>' + msg + '</p>');
 	infoBar.append(msg);
 
 	return infoBar;
+}
+
+/**
+ * Create warning bar
+ * 
+ * @param msg
+ *            Warning message
+ * @return Warning bar
+ */
+function createWarnBar(msg) {
+	var warnBar = $('<div class="ui-state-error ui-corner-all"></div>');
+	var msg = $('<p><span class="ui-icon ui-icon-alert"></span>' + msg + '</p>');
+	warnBar.append(msg);
+
+	return warnBar;
 }
 
 /**
@@ -401,7 +416,6 @@ function initPage() {
 	includeJs("js/jquery/jquery.autocomplete.js");
 	includeJs("js/jquery/jquery.contextmenu.js");
 	includeJs("js/jquery/jquery.cookie.js");
-	includeJs("js/jquery/jquery-impromptu.3.0.min.js");
 	includeJs("js/jquery/superfish.js");
 	includeJs("js/jquery/hoverIntent.js");
 	includeJs("js/jquery/jquery.tree.js");
@@ -504,4 +518,39 @@ function writeRsp(rsp, pattern) {
 	}
 
 	return prg;
+}
+
+/**
+ * Open a dialog and show given message
+ * 
+ * @param type
+ * 			Type of dialog, i.e. warn or info
+ * @param msg
+ * 			Message to show
+ * @return Nothing
+ */
+function openDialog(type, msg) {
+	var msgDialog; 
+	if (type == "warn") {
+		// Create warning message 
+		msgDialog = $('<div class="ui-state-error ui-corner-all">'
+				+ '<p><span class="ui-icon ui-icon-alert"></span>' + msg + '</p>'
+			+ '</div>');
+	} else {
+		// Create info message
+		msgDialog = $('<div class="ui-state-highlight ui-corner-all">' 
+				+ '<p><span class="ui-icon ui-icon-info"></span>' + msg + '</p>'
+			+'</div>');
+	}
+	
+	// Open dialog
+	msgDialog.dialog({
+		modal: true,
+		width: 400,
+		buttons: {
+			"Ok": function(){ 
+				$(this).dialog("close");
+			}
+		}
+	});
 }
