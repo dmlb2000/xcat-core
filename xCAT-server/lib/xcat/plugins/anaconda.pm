@@ -351,7 +351,7 @@ sub mknetboot
             }
 	    unless ( -r "$rootimgdir/rootimg.gz" or -r "$rootimgdir/rootimg.sfs" ) {
                 $callback->({
-                    error=>["No packed image for platform $osver, architecture $arch, and profile $profile, please run packimage (e.g. packimage -o $osver -p $profile -a $arch"],
+                    error=>["No packed image for platform $osver, architecture $arch, and profile $profile, please run packimage (e.g.  packimage -o $osver -p $profile -a $arch"],
                     errorcode => [1]});
                 next;
             }
@@ -559,6 +559,10 @@ sub mknetboot
             # TODO: currently, only "mac" attribute with classic style is used, the "|" delimited string of "macaddress!hostname" format is not used
             $mac = $machash->{$node}->[0]->{'mac'};
             if ( (index($mac, "|") eq -1) and (index($mac, "!") eq -1) ) {
+               #convert to linux format
+                if ($mac !~ /:/) {
+                   $mac =~s/(..)(..)(..)(..)(..)(..)/$1:$2:$3:$4:$5:$6/;
+                }
                 $kcmdline .= "$mac ";
             } else {
                 die qq{In the "mac" table, the "|" delimited string of "macaddress!hostname" format is not supported by "nodeset <nr> netboot|statelite if installnic/primarynic is set".};
@@ -1069,7 +1073,7 @@ sub mkinstall
         {
             $callback->(
                     {
-                     error => ["Install image not found in /install/$os/$arch"],
+                     error => ["Install image not found in $installroot/$os/$arch"],
                      errorcode => [1]
                     }
                     );
