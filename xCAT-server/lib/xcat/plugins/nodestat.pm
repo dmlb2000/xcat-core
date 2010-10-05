@@ -496,15 +496,15 @@ sub process_request_nmap {
    my %unknownnodes;
    foreach (@nodes) {
 	$unknownnodes{$_}=1;
-	my $packed_ip = undef;
-        $packed_ip = gethostbyname($_);
-        if( !defined $packed_ip) {
+	my $ip = undef;
+        $ip = xCAT::NetworkUtils->getipaddr($_);
+        if( !defined $ip) {
                 my %rsp;
                 $rsp{name}=[$_];
                 $rsp{data} = [ "Please make sure $_ exists in /etc/hosts or DNS" ];
                 $callback->({node=>[\%rsp]});
         } else {
-            $nodebyip{inet_ntoa($packed_ip)} = $_;
+            $nodebyip{$ip} = $_;
         }
    }
 
@@ -526,11 +526,31 @@ sub process_request_nmap {
    my $installquerypossible=0;
    my @nodesetnodes=();
    while (<$fping>) {
-      if (/Interesting ports on ([^ ]*) /) {
-          $currnode=$1;
+      if (/Interesting ports on ([^ ]*) / or /Nmap scan report for ([^ ]*)/) {
+          my $tmpnode=$1;
+          if ($currnode) {     #if still thinking about last node, flush him out
+              my $status = join ',',sort keys %states ;
+              my $appsd="";
+              foreach my $portnum(keys %portservices) {
+                  my $app_t=$portservices{$portnum};
+		  if ($states{$app_t}) {$appsd .= $app_t . "=up,";}
+		  else {$appsd .= $app_t . "=down,";}
+	      }
+	      $appsd =~ s/,$//;
+
+              if ($status or ($installquerypossible and $status = installer_query($currnode))) { #pingable, but no *clue* as to what the state may be
+                  $ret->{$currnode}->{'status'}="ping";
+                  $ret->{$currnode}->{'appstatus'}=$status;
+                  $ret->{$currnode}->{'appsd'}=$appsd;
+                  $currnode="";
+                  %states=();
+              } else {
+                 push @nodesetnodes,$currnode; #Aggregate call to nodeset
+              }
+          }
+          $currnode=$tmpnode;
           my $nip;
-          if ($nip = gethostbyname($currnode)) {
-              $nip = inet_ntoa($nip); #reverse lookup may not resemble the nodename, key by ip
+          if ($nip = xCAT::NetworkUtils->getipaddr($currnode)) { #reverse lookup may not resemble the nodename, key by ip
               if ($nodebyip{$nip}) {
                  $currnode = $nodebyip{$nip};
               }
@@ -553,27 +573,6 @@ sub process_request_nmap {
           delete $deadnodes{$currnode};
       } elsif ($currnode) {
           #if (/^MAC/) {  #oops not all nmap records end with MAC
-          if (/^$/) {     #search for blank line instead
-              my $status = join ',',sort keys %states ;
-              my $appsd="";
-              foreach my $portnum(keys %portservices) {
-                  my $app_t=$portservices{$portnum};
-		  if ($states{$app_t}) {$appsd .= $app_t . "=up,";}
-		  else {$appsd .= $app_t . "=down,";}
-	      }
-	      $appsd =~ s/,$//;
-
-              unless ($status or ($installquerypossible and $status = installer_query($currnode))) { #pingable, but no *clue* as to what the state may be
-                 push @nodesetnodes,$currnode; #Aggregate call to nodeset
-                 next;
-              }
-              $ret->{$currnode}->{'status'}="ping";
-              $ret->{$currnode}->{'appstatus'}=$status;
-              $ret->{$currnode}->{'appsd'}=$appsd;
-              $currnode="";
-              %states=();
-              next;
-          }
           if (/^PORT/) { next; }
           ($port,$state) = split;
           if ($port =~ /^(\d*)\// and $state eq 'open') {
@@ -585,6 +584,24 @@ sub process_request_nmap {
           }
       } 
     }
+              my $status = join ',',sort keys %states ;
+              my $appsd="";
+              foreach my $portnum(keys %portservices) {
+                  my $app_t=$portservices{$portnum};
+		  if ($states{$app_t}) {$appsd .= $app_t . "=up,";}
+		  else {$appsd .= $app_t . "=down,";}
+	      }
+	      $appsd =~ s/,$//;
+
+              if ($status or ($installquerypossible and $status = installer_query($currnode))) { #pingable, but no *clue* as to what the state may be
+                  $ret->{$currnode}->{'status'}="ping";
+                  $ret->{$currnode}->{'appstatus'}=$status;
+                  $ret->{$currnode}->{'appsd'}=$appsd;
+                  $currnode="";
+                  %states=();
+              } else {
+                 push @nodesetnodes,$currnode; #Aggregate call to nodeset
+              }
     if (@nodesetnodes) {
         $doreq->({command=>['nodeset'],
                   node=>\@nodesetnodes,
