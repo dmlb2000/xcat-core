@@ -74,7 +74,7 @@ if [[ $NTYPE = service ]]; then
 fi
 
 if [[ $OSTYPE = linux* ]]; then
-  if [[ $OSVER = fedora* ]] || [[ $OSVER = rhels5* ]] || [[ $OSVER = rhel6* ]] || [[ $OSVER = rhels6* ]] || [[ -f /etc/fedora-release ]]; then
+  if [[ $OSVER = fedora* ]] || [[ $OSVER = rhels5* ]] || [[ $OSVER = rhel6* ]] || [[ $OSVER = rhels6* ]] || [[ -f /etc/fedora-release ]] || [[ -f /etc/redhat-release ]]; then
     if [ -e /etc/rsyslog.conf ]; then
       conf_file="/etc/rsyslog.conf"
       sysconfig="/etc/sysconfig/rsyslog"
@@ -109,7 +109,7 @@ if [ $isLinux -eq 1 ] && [ -a $sysconfig ]; then
 
   #check if it is ryslog version 3, it has totally different settings in /etc/syslog.cong
   if [ $isRsyslog -eq 1 ]; then
-    grep "SYSLOGD_OPTIONS" $sysconfig | grep -e "[\-c 3|\-c3]" 2>&1 1> /dev/null
+    grep "SYSLOGD_OPTIONS" $sysconfig | grep -e "[\-c 3|\-c3|\-c4|\-c 4]" 2>&1 1> /dev/null
     if [ $? -eq 0 ]; then
       isC3=1
     fi
