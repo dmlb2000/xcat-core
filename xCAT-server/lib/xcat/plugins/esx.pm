@@ -1762,7 +1762,7 @@ sub register_vm {#Attempt to register existing instance of a VM
     }
 
     my $success = eval {
-        $task = $hyphash{$hyp}->{vmfolder}->RegisterVM_Task(path=>getcfgdatastore($node,$hyphash{$hyp}->{datastoremap})." /$node/$node.vmx",name=>$node,pool=>$hyphash{$hyp}->{pool},asTemplate=>0);
+        $task = $hyphash{$hyp}->{vmfolder}->RegisterVM_Task(path=>getcfgdatastore($node,$hyphash{$hyp}->{datastoremap})." /$node/$node.vmx",name=>$node,pool=>$hyphash{$hyp}->{pool},asTemplate=>0,host=>$hyphash{$hyp}->{hostview});
     };
     if ($@ or not $success) {
         print $@;
