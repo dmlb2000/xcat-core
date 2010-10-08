@@ -30,9 +30,9 @@ function createNodesDatatable(group, outId) {
 			// Data returned
     		var rsp = data.rsp;
     
-    		// Output ID
+    		// Get output ID
     		var outId = data.msg;
-    		// Datatable ID
+    		// Get datatable ID
     		var dTableId = outId.replace('DIV', '');
     
     		// Node attributes hash
@@ -247,6 +247,7 @@ function createProvisionExisting(plugin, inst) {
 	var provisionBtn = createButton('Provision');
 	provisionBtn.bind('click', function(event) {
 		// TODO Insert provision code here
+		openDialog('info', 'Under construction');
 	});
 	provExisting.append(provisionBtn);
 
@@ -360,6 +361,7 @@ function createProvisionNew(plugin, inst) {
 	var provisionBtn = createButton('Provision');
 	provisionBtn.bind('click', function(event) {
 		// TODO Insert provision code here
+		openDialog('info', 'Under construction');
 	});
 	provNew.append(provisionBtn);
 

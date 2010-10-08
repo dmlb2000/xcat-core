@@ -518,8 +518,7 @@ function updateZProvisionNewStatus(data) {
 	 * (7) Update DHCP
 	 */
 	else if (cmd == 'noderes') {
-		// If there was an error
-		// Do not continue
+		// If there was an error, do not continue
 		if (rsp.length) {
 			$('#' + loaderId).hide();
 			$('#' + statBarId).append('<p>(Error) Failed to set operating system</p>');
@@ -662,8 +661,7 @@ function updateZProvisionExistingStatus(data) {
 		var prg = writeRsp(rsp, '');	
 		$('#' + statBarId).append(prg);
 
-		// If there was an error
-		// Do not continue
+		// If there was an error, do not continue
 		if (prg.html().indexOf('Error') > -1) {
 			var loaderId = 'zProvisionLoader' + inst;
 			$('#' + loaderId).remove();
@@ -756,8 +754,7 @@ function updateZCloneStatus(data) {
 	if (cmd == 'nodeadd') {
 		var node = args[3].replace('node=', '');
 
-		// If there was an error
-		// Do not continue
+		// If there was an error, do not continue
 		if (rsp.length) {
 			$('#' + out2Id).find('img').hide();
 			$('#' + out2Id).append('<p>(Error) Failed to create node definition</p>');
@@ -787,8 +784,7 @@ function updateZCloneStatus(data) {
 	 * (3) Update DNS
 	 */
 	else if (cmd == 'makehosts') {
-		// If there was an error
-		// Do not continue
+		// If there was an error, do not continue
 		if (rsp.length) {
 			$('#' + out2Id).find('img').hide();
 			$('#' + out2Id).append('<p>(Error) Failed to update /etc/hosts</p>');
@@ -1029,10 +1025,7 @@ function openAddProcDialog(node) {
 		modal: true,
 		width: 400,
 		buttons: {
-        	"Cancel": function() {
-        		$(this).dialog( "close" );
-        	},
-			"Ok": function(){
+        	"Ok": function(){
         		// Remove any warning messages
         		$(this).find('.ui-state-error').remove();
         		
@@ -1072,7 +1065,10 @@ function openAddProcDialog(node) {
     				// Close dialog
     				$(this).dialog( "close" );
 				}
-			}
+			},
+			"Cancel": function() {
+        		$(this).dialog( "close" );
+        	}
 		}
 	});
 }
@@ -1133,10 +1129,7 @@ function openAddDiskDialog(node, hcp) {
 		modal: true,
 		width: 400,
 		buttons: {
-        	"Cancel": function() {
-        		$(this).dialog( "close" );
-        	},
-			"Ok": function(){
+        	"Ok": function(){
         		// Remove any warning messages
         		$(this).find('.ui-state-error').remove();
         		
@@ -1209,7 +1202,10 @@ function openAddDiskDialog(node, hcp) {
     				// Close dialog
     				$(this).dialog( "close" );
         		} // End of else
-			} // End of function()
+			},
+			"Cancel": function() {
+        		$(this).dialog( "close" );
+        	}
 		}
 	});
 }
@@ -1363,10 +1359,7 @@ function openAddNicDialog(node, hcp) {
 		modal: true,
 		width: 400,
 		buttons: {
-        	"Cancel": function(){
-        		$(this).dialog( "close" );
-        	},
-			"Ok": function(){
+        	"Ok": function(){
         		// Remove any warning messages
         		$(this).find('.ui-state-error').remove();
         		
@@ -1455,7 +1448,10 @@ function openAddNicDialog(node, hcp) {
     				// Close dialog
     				$(this).dialog( "close" );
         		} // End of else
-			} // End of function()
+			},
+			"Cancel": function(){
+        		$(this).dialog( "close" );
+        	}
 		}
 	});
 }
@@ -1702,6 +1698,10 @@ function loadDiskPoolTable(data) {
 	// Get datatable
 	var dTable = getDiskDataTable();
 	if (!dTable) {
+		// Create info bar
+		var info = createInfoBar('Shows DASD volume pools defined in the EXTENT CONTROL file.');
+		$('#' + tabID).append(info);
+		
 		// Create disks section
 		var fieldSet = $('<fieldset></fieldset>');
 		var legend = $('<legend>Disks</legend>');
@@ -1756,6 +1756,10 @@ function loadNetworkTable(data) {
 	// Get datatable
 	var dTable = getNetworkDataTable();
 	if (!dTable) {
+		// Create info bar
+		var info = createInfoBar('Shows LANs and VSWITCHes found by a given zHCP.');
+		$('#' + tabID).append(info);
+		
 		// Create networks section
 		var fieldSet = $('<fieldset></fieldset>');
 		var legend = $('<legend>Networks</legend>');
@@ -2307,9 +2311,6 @@ function createZProvisionNew(inst) {
 					modal: true,
 					width: 400,
 					buttons: {
-						"Cancel": function() {
-							$(this).dialog("close");
-						},
 						"Ok": function(){
 							// Disable provision button
 							provisionBtn.attr('disabled', 'true');
@@ -2369,7 +2370,10 @@ function createZProvisionNew(inst) {
 							});
 														
 							$(this).dialog("close");
-						} // End of function()
+						},
+						"Cancel": function() {
+							$(this).dialog("close");
+						}
 					}
 				});	
 			} else {

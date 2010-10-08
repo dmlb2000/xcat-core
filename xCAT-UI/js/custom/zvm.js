@@ -50,8 +50,7 @@ zvmPlugin.prototype.loadClonePage = function(node) {
 
 		// Create status bar and hide it
 		var statBarId = node + 'CloneStatusBar';
-		var statBar = $('<div class="statusBar" id="' + statBarId + '"></div>')
-			.hide();
+		var statBar = $('<div class="statusBar" id="' + statBarId + '"></div>').hide();
 
 		// Create info bar
 		var infoBar = createInfoBar('Clone a node');
@@ -141,7 +140,7 @@ zvmPlugin.prototype.loadClonePage = function(node) {
 					// Get starting index
 					var nodeStart = parseInt(tmp[0].match(/\d+/));
 					// Get ending index
-					var nodeEnd = parseInt(tmp[1]);
+					var nodeEnd = parseInt(tmp[1].match(/\d+/));
 
 					tmp = userIdRange.split('-');
 
@@ -150,7 +149,7 @@ zvmPlugin.prototype.loadClonePage = function(node) {
 					// Get starting index
 					var userIdStart = parseInt(tmp[0].match(/\d+/));
 					// Get ending index
-					var userIdEnd = parseInt(tmp[1]);
+					var userIdEnd = parseInt(tmp[1].match(/\d+/));
 
 					// If starting and ending index do not match
 					if (!(nodeStart == userIdStart) || !(nodeEnd == userIdEnd)) {
@@ -183,7 +182,7 @@ zvmPlugin.prototype.loadClonePage = function(node) {
 					// Get starting index
 					var nodeStart = parseInt(tmp[0].match(/\d+/));
 					// Get ending index
-					var nodeEnd = parseInt(tmp[1]);
+					var nodeEnd = parseInt(tmp[1].match(/\d+/));
 
 					tmp = userIdRange.split('-');
 
@@ -192,7 +191,7 @@ zvmPlugin.prototype.loadClonePage = function(node) {
 					// Get starting index
 					var userIdStart = parseInt(tmp[0].match(/\d+/));
 					// Get ending index
-					var userIdEnd = parseInt(tmp[1]);
+					var userIdEnd = parseInt(tmp[1].match(/\d+/));
 
 					// Loop through each node in the node range
 					for ( var i = nodeStart; i <= nodeEnd; i++) {
@@ -496,11 +495,11 @@ zvmPlugin.prototype.loadInventory = function(data) {
     					modal: true,
     					width: 300,
     					buttons: {
-    						"Cancel": function() {
-    							$(this).dialog("close");
-    						},
     						"Ok": function(){
     							removeProcessor(node, addr);
+    							$(this).dialog("close");
+    						},
+    						"Cancel": function() {
     							$(this).dialog("close");
     						}
     					}
@@ -604,11 +603,11 @@ zvmPlugin.prototype.loadInventory = function(data) {
     					modal: true,
     					width: 300,
     					buttons: {
-    						"Cancel": function() {
-    							$(this).dialog("close");
-    						},
     						"Ok": function(){
     							removeDisk(node, addr);
+    							$(this).dialog("close");
+    						},
+    						"Cancel": function() {
     							$(this).dialog("close");
     						}
     					}
@@ -640,8 +639,7 @@ zvmPlugin.prototype.loadInventory = function(data) {
     				dasdType = $('<td>' + args[2] + '</td>');
     				dasdVolId = $('<td>' + args[3] + '</td>');
     				dasdAccess = $('<td>' + args[4] + '</td>');
-    				dasdSize = $('<td>' + args[args.length - 9] + ' '
-    					+ args[args.length - 8] + '</td>');
+    				dasdSize = $('<td>' + args[args.length - 9] + ' ' + args[args.length - 8] + '</td>');
     
     				// Create a new row for each DASD
     				dasdTabRow = $('<tr></tr>');
@@ -696,11 +694,11 @@ zvmPlugin.prototype.loadInventory = function(data) {
     					modal: true,
     					width: 300,
     					buttons: {
-    						"Cancel": function() {
-    							$(this).dialog("close");
-    						},
     						"Ok": function(){
     							removeNic(node, addr);
+    							$(this).dialog("close");
+    						},
+    						"Cancel": function() {
     							$(this).dialog("close");
     						}
     					}
@@ -923,10 +921,7 @@ zvmPlugin.prototype.addNode = function() {
 		modal: true,
 		width: 400,
 		buttons: {
-        	"Cancel": function(){
-        		$(this).dialog( "close" );
-        	},
-			"Ok": function(){
+        	"Ok": function(){
         		// Remove any warning messages
         		$(this).find('.ui-state-error').remove();
         		
@@ -942,6 +937,7 @@ zvmPlugin.prototype.addNode = function() {
 					warn.prependTo($(this));
         		} else {
     				// Check node range and user ID range
+        			// Range can be given as gpok10-gpok20, gpok[10-20], or gpok10+10
     				var errMsg = '';
     				var ready = true;
     				if (nodeRange.indexOf('-') > -1 || userIdRange.indexOf('-') > -1) {
@@ -956,7 +952,7 @@ zvmPlugin.prototype.addNode = function() {
     						// Get starting index
     						var nodeStart = parseInt(tmp[0].match(/\d+/));
     						// Get ending index
-    						var nodeEnd = parseInt(tmp[1]);
+    						var nodeEnd = parseInt(tmp[1].match(/\d+/));
     
     						tmp = userIdRange.split('-');
     
@@ -965,7 +961,7 @@ zvmPlugin.prototype.addNode = function() {
     						// Get starting index
     						var userIdStart = parseInt(tmp[0].match(/\d+/));
     						// Get ending index
-    						var userIdEnd = parseInt(tmp[1]);
+    						var userIdEnd = parseInt(tmp[1].match(/\d+/));
     
     						// If starting and ending index do not match
     						if (!(nodeStart == userIdStart) || !(nodeEnd == userIdEnd)) {
@@ -987,7 +983,7 @@ zvmPlugin.prototype.addNode = function() {
     			    		// Get starting index
     			    		var nodeStart = parseInt(tmp[0].match(/\d+/));
     			    		// Get ending index
-    			    		var nodeEnd = parseInt(tmp[1]);
+    			    		var nodeEnd = parseInt(tmp[1].match(/\d+/));
     			    
     			    		tmp = userIdRange.split('-');
     			    
@@ -996,7 +992,7 @@ zvmPlugin.prototype.addNode = function() {
     			    		// Get starting index
     			    		var userIdStart = parseInt(tmp[0].match(/\d+/));
     			    		// Get ending index
-    			    		var userIdEnd = parseInt(tmp[1]);
+    			    		var userIdEnd = parseInt(tmp[1].match(/\d+/));
     			    
     			    		// Loop through each node in the node range
     			    		for ( var i = nodeStart; i <= nodeEnd; i++) {
@@ -1097,7 +1093,10 @@ zvmPlugin.prototype.addNode = function() {
     					warn.prependTo($(this));
     				}		
     			} // End of else
-        	} // End of function() 
+        	},
+        	"Cancel": function(){
+        		$(this).dialog( "close" );
+        	}
 		}
 	});
 };

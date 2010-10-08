@@ -86,7 +86,29 @@ hmcPlugin.prototype.loadInventory = function(data) {
  * @return Nothing
  */
 hmcPlugin.prototype.loadClonePage = function(node) {
+	// Get nodes tab
+	var tab = getNodesTab();
+	var newTabId = node + 'CloneTab';
 
+	// If there is no existing clone tab
+	if (!$('#' + newTabId).length) {
+		// Create status bar and hide it
+		var statBarId = node + 'CloneStatusBar';
+		var statBar = $('<div class="statusBar" id="' + statBarId + '"></div>').hide();
+
+		// Create info bar
+		var infoBar = createInfoBar('Under construction');
+
+		// Create clone form
+		var cloneForm = $('<div class="form"></div>');
+		cloneForm.append(statBar);
+		cloneForm.append(infoBar);
+
+		// Add clone tab
+		tab.add(newTabId, 'Clone', cloneForm, true);
+	}
+	
+	tab.select(newTabId);
 };
 
 /**
@@ -164,12 +186,14 @@ hmcPlugin.prototype.loadProvisionPage = function(tabId) {
 	/**
 	 * Create provision new node division
 	 */
+	// You should copy whatever is in this function, put it here, and customize it
 	var provNew = createProvisionNew('hmc', inst);
 	provForm.append(provNew);
 
 	/**
 	 * Create provision existing node division
 	 */
+	// You should copy whatever is in this function, put it here, and customize it
 	var provExisting = createProvisionExisting('hmc', inst);
 	provForm.append(provExisting);
 
@@ -192,7 +216,22 @@ hmcPlugin.prototype.loadProvisionPage = function(tabId) {
  * @return Nothing
  */
 hmcPlugin.prototype.loadResources = function() {
+	// Get resource tab ID
+	var tabID = 'hmcResourceTab';
+	// Get loader ID
+	var loaderID = 'hmcResourceLoader';
+	if ($('#' + loaderID).length) {
+		$('#' + loaderID).remove();
+	}
+	
+	// Create info bar
+	var infoBar = createInfoBar('Under construction');
 
+	// Create resource form
+	var resrcForm = $('<div class="form"></div>');
+	resrcForm.append(infoBar);
+	
+	$('#' + tabID).append(resrcForm);
 };
 
 /**
@@ -201,5 +240,5 @@ hmcPlugin.prototype.loadResources = function() {
  * @return Nothing
  */
 hmcPlugin.prototype.addNode = function() {
-	
+	openDialog('info', 'Under construction');
 };
