@@ -4780,7 +4780,7 @@ sub rmnimimage
                     {
                         $loc =
                           xCAT::InstUtils->get_nim_attr_val($resname,
-                                            'location', $callback, "", $subreq);
+                                            'location', $callback, $Sname, $subreq);
                     }
 
                     #  need the directory name to remove these
@@ -4788,7 +4788,7 @@ sub rmnimimage
                     {
                         my $tmp =
                           xCAT::InstUtils->get_nim_attr_val($resname,
-                                            'location', $callback, "", $subreq);
+                                            'location', $callback, $Sname, $subreq);
                         $loc = dirname($tmp);
                     }
                 }
