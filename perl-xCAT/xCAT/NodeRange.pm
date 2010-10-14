@@ -288,6 +288,11 @@ sub expandatom { #TODO: implement table selection as an atom (nodetype.os==rhels
 			my $subop=shift @subelems;
 			$subrange=$subrange."$1$subelem$3$subop";
 		}
+		# if there is another set of brackets, bail or else it sends us into infinite recursion
+		if ($1 =~ /\[/) {
+			if ($verify) { push @$missingnodes,$subrange; return (); }
+			else { return ($subrange); }
+		}
 		foreach (split /,/,$subrange) {
 			my @newnodes=expandatom($_,$verify);
 			@nodes=(@nodes,@newnodes);
