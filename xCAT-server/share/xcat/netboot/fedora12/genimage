@@ -808,7 +808,7 @@ if [ "\$NFSROOT" = "1" ]; then
 	# now that everything is mounted, lets do this
 	# hmmm, apparently I'm checking this twice... so I'd better
 	# be really sure the file is there.
-	while [ -z \$NEWROOT/etc/init.d/statelite ]
+	while [ ! -e \$NEWROOT/etc/init.d/statelite ]
 	do
 		echo "\$NEWROOT/etc/init.d/statelite does not exist in image!"
 		shell
@@ -941,7 +941,7 @@ EOMS
      }
    }
    # add rsync for statelite
-   foreach ("bin/cpio","bin/mkdir","sbin/insmod","sbin/nash","bin/sleep","sbin/ifconfig","bin/grep","sbin/dhclient","bin/dash","bin/mount","bin/mknod","usr/bin/wget","sbin/rmmod","sbin/mount.nfs","/usr/bin/rsync") {
+   foreach ("bin/cpio","bin/mkdir","sbin/insmod","sbin/nash","bin/sleep","sbin/ifconfig","bin/grep","sbin/dhclient","bin/dash","bin/mount","bin/mknod","usr/bin/wget","sbin/rmmod","sbin/mount.nfs","usr/bin/rsync","usr/bin/wc") {
       getlibs($_);
       push @filestoadd,$_;
    }

@@ -979,6 +979,7 @@ chmod(0755,"/tmp/xcatinitrd.$$/init");
         "usr/bin/uniq",
         "bin/sed",
         "sbin/nash",
+        "usr/bin/wc",
         "sbin/busybox.anaconda",
         "sbin/busybox",
         "sbin/rmmod",
