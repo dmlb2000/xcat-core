@@ -70,7 +70,6 @@ $::command = "$0 $args";
 Getopt::Long::Configure("bundling");
 $Getopt::Long::ignorecase = 0;
 $::databaseloc            = "/var/lib/db2";    # database loccation
-
 # parse the options
 if (
     !GetOptions(
@@ -1182,13 +1181,20 @@ sub setupODBC
     }
 
     # setup the odbcinst.ini file
-    my $sharedlib = "/var/lib/db2/sqllib/lib/libdb2.so";
+    my $linuxsharedlib="/var/lib/db2/sqllib/lib/libdb2o.so";
+    my $AIXsharedlib = "/var/lib/db2/sqllib/lib/libdb2.so";
     $cmd = "fgrep -i  driver $odbcinstfile ";
     xCAT::Utils->runcmd($cmd, -1);
     if ($::RUNCMD_RC != 0)    # then driver entry not there
     {
-        my $entry =
-          "[DB2]\nDescription = ODBC for DB2\nDriver      = $sharedlib";
+        my $entry;
+        if ($::osname eq 'AIX') {
+          $entry =
+           "[DB2]\nDescription = ODBC for DB2\nDriver      = $AIXsharedlib";
+        }else {
+          $entry =
+           "[DB2]\nDescription = ODBC for DB2\nDriver      = $linuxsharedlib";
+        }
         $cmd = "echo \"$entry\" >> $odbcinstfile";
         xCAT::Utils->runcmd($cmd, 0);
         if ($::RUNCMD_RC != 0)
@@ -1207,6 +1213,15 @@ sub setupODBC
             exit(1);
         }
         $entry = "DontDLClose = 1";
+        $cmd   = "echo \"$entry\" >> $odbcinstfile";
+        xCAT::Utils->runcmd($cmd, 0);
+        if ($::RUNCMD_RC != 0)
+        {
+            $message = "$cmd failed. Could not setup $odbcinstfile.";
+            xCAT::MsgUtils->message("E", "$message");
+            exit(1);
+        }
+        $entry = "Threading = 0";
         $cmd   = "echo \"$entry\" >> $odbcinstfile";
         xCAT::Utils->runcmd($cmd, 0);
         if ($::RUNCMD_RC != 0)
@@ -1365,7 +1380,7 @@ sub createcfgloc
     my $message;
 
     # if they had an old cfgloc , save it
-    if ((-e ($cfgloc)) && (!(-e ($cfglocbackup))))
+    if (-e ($cfgloc))
     {
         $cmd = "mv $cfgloc $cfglocbackup";
         xCAT::Utils->runcmd($cmd, 0);
