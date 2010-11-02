@@ -1925,7 +1925,7 @@ function createZProvisionExisting(inst) {
 	// Create operating system image input
 	var os = $('<div></div>');
 	var osLabel = $('<label for="os">Operating system image:</label>');
-	var osInput = $('<input type="text" name="os"/>');
+	var osInput = $('<input type="text" name="os" title="You must give the operating system to install on this node or node range, e.g. rhel5.5-s390x-install-compute"/>');
 	// Get image names on focus
 	osInput.one('focus', function(){
 		var imageNames = $.cookie('ImageNames');
@@ -1951,6 +1951,14 @@ function createZProvisionExisting(inst) {
 	bootMethod.append(methoddLabel);
 	bootMethod.append(methodSelect);
 	provExisting.append(bootMethod);
+	
+	// Generate tooltips
+	provExisting.find('div input[title]').tooltip({
+		position: "center right",	// Place tooltip on the right edge
+		offset: [-2, 10],	// A little tweaking of the position
+		effect: "fade",		// Use the built-in fadeIn/fadeOut effect			
+		opacity: 0.7		// Custom opacity setting
+	});
 	
 	/**
 	 * Provision existing
@@ -2050,7 +2058,7 @@ function createZProvisionNew(inst) {
 	// Create group input
 	var group = $('<div></div>');
 	var groupLabel = $('<label>Group:</label>');
-	var groupInput = $('<input type="text" name="group"/>');
+	var groupInput = $('<input type="text" name="group" title="You must give the group name that the node(s) will be placed under"/>');
 	// Get groups on-focus
 	groupInput.one('focus', function(){
 		var groupNames = $.cookie('Groups');
@@ -2066,19 +2074,19 @@ function createZProvisionNew(inst) {
 	// Create node input
 	var nodeName = $('<div></div>');
 	var nodeLabel = $('<label>Node:</label>');
-	var nodeInput = $('<input type="text" name="nodeName"/>');
+	var nodeInput = $('<input type="text" name="nodeName" title="You must give a node or a node range. A node range must be given as: node1-node9 or node[1-9]."/>');
 	nodeName.append(nodeLabel);
 	nodeName.append(nodeInput);
 	provNew.append(nodeName);
 
 	// Create user ID input
-	var userId = $('<div><label>User ID:</label><input type="text" name="userId"/></div>');
+	var userId = $('<div><label>User ID:</label><input type="text" name="userId" title="You must give a user ID or a user ID range. A user ID range must be given as: user1-user9 or user[1-9]."/></div>');
 	provNew.append(userId);
 
 	// Create hardware control point input
 	var hcpDiv = $('<div></div>');
 	var hcpLabel = $('<label for="hcp">Hardware control point:</label>');
-	var hcpInput = $('<input type="text" name="hcp"/>');
+	var hcpInput = $('<input type="text" name="hcp" title="You must give the System z hardware control point (zHCP) responsible for managing the node(s)"/>');
 	hcpInput.blur(function() {
 		if ($(this).val()) {
 			var args = $(this).val().split('.');
@@ -2105,7 +2113,7 @@ function createZProvisionNew(inst) {
 	// Create operating system image input
 	var os = $('<div></div>');
 	var osLabel = $('<label for="os">Operating system image:</label>');
-	var osInput = $('<input type="text" name="os"/>');
+	var osInput = $('<input type="text" name="os" title="You must give the operating system to install on this node or node range, e.g. rhel5.5-s390x-install-compute"/>');
 	// Get image names on focus
 	osInput.one('focus', function(){
 		var imageNames = $.cookie('ImageNames');
@@ -2163,11 +2171,11 @@ function createZProvisionNew(inst) {
 		diskRow.append(diskType);
 
 		// Create disk address input
-		var diskAddr = $('<td><input type="text"/></td>');
+		var diskAddr = $('<td><input type="text" title="You must give the virtual device address of the disk to be added"/></td>');
 		diskRow.append(diskAddr);
 
 		// Create disk size input
-		var diskSize = $('<td><input type="text"/></td>');
+		var diskSize = $('<td><input type="text" title="You must give the size of the disk to be created.  The size value is one of the following: cylinders or block size. "/></td>');
 		diskRow.append(diskSize);
 		
 		// Create disk mode input
@@ -2196,15 +2204,23 @@ function createZProvisionNew(inst) {
 
 		// Create disk pool input
 		// Turn on auto complete for disk pool
-		var diskPoolInput = $('<input type="text"/>').autocomplete(definedPools.split(','));
+		var diskPoolInput = $('<input type="text" title="You must give the group or region where the new image disk is to be created"/>').autocomplete(definedPools.split(','));
 		var diskPool = $('<td></td>').append(diskPoolInput);
 		diskRow.append(diskPool);
 
 		// Create disk password input
-		var diskPw = $('<td><input type="password"/></td>');
+		var diskPw = $('<td><input type="password" title="You must give the password that will be used for accessing the disk"/></td>');
 		diskRow.append(diskPw);
 
 		diskBody.append(diskRow);
+		
+		// Generate tooltips
+		diskBody.find('td input[title]').tooltip({
+			position: "top right",	// Place tooltip on the right edge
+			offset: [-4, 4],	// Moves tooltip upwards 4px and 4px to the right
+			effect: "fade",		// Use the built-in fadeIn/fadeOut effect			
+			opacity: 0.7		// Custom opacity setting
+		});
 	});
 	
 	// Create disk table
@@ -2216,6 +2232,14 @@ function createZProvisionNew(inst) {
 	diskDiv.append(diskLabel);
 	diskDiv.append(diskTable);
 	provNew.append(diskDiv);
+	
+	// Generate tooltips
+	provNew.find('div input[title]').tooltip({
+		position: "center right",	// Place tooltip on the right edge
+		offset: [-2, 10],	// A little tweaking of the position
+		effect: "fade",		// Use the built-in fadeIn/fadeOut effect			
+		opacity: 0.7		// Custom opacity setting
+	});
 	
 	/**
 	 * Provision new
