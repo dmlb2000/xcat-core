@@ -2532,6 +2532,7 @@ sub validate_datastore_prereqs {
     my $nodes = shift;
     my $hyp = shift;
     my $newdatastores = shift; # a hash reference of URLs to afflicted nodes outside of table space
+#better comment: url map to nodes that are not currently on that datastore, but are about to need it (storage migration)
     my $hypconn = $hyphash{$hyp}->{conn};
     my $hostview = $hyphash{$hyp}->{hostview};
     unless ($hostview) {
