@@ -2596,6 +2596,7 @@ sub validate_datastore_prereqs {
     }
     if (ref $newdatastores) {
         foreach (keys %$newdatastores) {
+            my $origurl=$_;
             s/\/$//; #Strip trailing slash if specified, to align to VMware semantics
             if (/:\/\//) {
                 ($method,$location) = split /:\/\//,$_,2;
@@ -2618,6 +2619,9 @@ sub validate_datastore_prereqs {
                     $refresh_names=1;
                     ($hyphash{$hyp}->{datastoremap}->{$uri},$hyphash{$hyp}->{datastorerefmap}->{$uri})=mount_nfs_datastore($hostview,$location);
                 }
+                $hyphash{$hyp}->{datastoremap}->{$origurl}=$hyphash{$hyp}->{datastoremap}->{$uri};
+                $hyphash{$hyp}->{datastorerefmap}->{$origurl}=$hyphash{$hyp}->{datastorerefmap}->{$uri};
+
             } else {
                 foreach (@{$newdatastores->{$_}}) {
                     sendmsg([1,": $_ not supported storage specification for ESX plugin, 'nfs://<server>/<path>' only currently supported vm.storage supported for ESX at the moment"],$_);
