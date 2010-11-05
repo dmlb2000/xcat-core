@@ -43,6 +43,7 @@ my $currkey;
 my $requester;
 my $viavcenter;
 my $viavcenterbyhyp;
+my $vcenterautojoin=1;
 my $vmwaresdkdetect = eval {
     require VMware::VIRuntime;
     VMware::VIRuntime->import();
@@ -296,6 +297,13 @@ sub process_request {
 		(my $ref) = $sitetab->getAttribs({key => 'usehostnamesforvcenter'}, 'value');
 		if ($ref and $ref->{value}) {
 			$usehostnamesforvcenter = $ref->{value};
+		}
+		($ref) = $sitetab->getAttribs({key => 'vcenterautojoin'}, 'value');
+		if ($ref and defined $ref->{value}) {
+			$vcenterautojoin = $ref->{value};
+            if ($vcenterautojoin =~ /^n/ or $vcenterautojoin =~ /^dis/) {
+                $vcenterautojoin=0;
+            }
 		}
 	}
 
@@ -2757,7 +2765,9 @@ sub validate_vcenter_prereqs { #Communicate with vCenter and ensure this host is
     if ($hview) { 
         if ($hview->{'summary.config.name'} =~ /^$hyp(?:\.|\z)/ or $hview->{'summary.config.name'} =~ /^$name(?:\.|\z)/) { #Looks good, call the dependent function after declaring the state of vcenter to hypervisor as good
             if ($hview->{'summary.runtime.connectionState'}->val eq 'connected') {
-                enable_vmotion(hypname=>$hyp,hostview=>$hview,conn=>$hyphash{$hyp}->{vcenter}->{conn});
+                if ($vcenterautojoin) { #admin has requested manual vcenter management, don't mess with vmotion settings
+                    enable_vmotion(hypname=>$hyp,hostview=>$hview,conn=>$hyphash{$hyp}->{vcenter}->{conn});
+                }
                 $vcenterhash{$vcenter}->{goodhyps}->{$hyp} = 1;
                 $depfun->($depargs);
                 if ($hview->parent->type eq 'ClusterComputeResource') { #if it is in a cluster, we can directly remove it
@@ -2768,7 +2778,7 @@ sub validate_vcenter_prereqs { #Communicate with vCenter and ensure this host is
 
 
                 return 1;
-            } else {
+            } elsif ($vcenterautojoin) { #if allowed autojoin and the current view seems corrupt, throw it away and rejoin
                 my $ref_to_delete;
                 if ($hview->parent->type eq 'ClusterComputeResource') { #We are allowed to specifically kill a host in a cluster
                     $ref_to_delete = $hview->{mo_ref};
@@ -2791,8 +2801,17 @@ sub validate_vcenter_prereqs { #Communicate with vCenter and ensure this host is
 #               $running_tasks{$task}->{conn} = $hyphash{$hyp}->{vcenter}->{conn};
 #               $running_tasks{$task}->{data} = { depfun => $depfun, depargs => $depargs, conn=>  $hyphash{$hyp}->{vcenter}->{conn}, connspec=>$connspec,hostview=>$hview,hypname=>$hyp,vcenter=>$vcenter };
 #ADDHOST
+            } else {
+            	xCAT::SvrUtils::sendmsg([1,": Failed to communicate with $hyp, vCenter reports it as in inventory but not connected and xCAT is set to not autojoin"], $output_handler);
+                    $hyphash{$hyp}->{conn} = undef;
+                    return "failed";
             }
         }
+    }
+    unless ($vcenterautojoin) {
+            	xCAT::SvrUtils::sendmsg([1,": Failed to communicate with $hyp, vCenter does not have it in inventory and xCAT is set to not autojoin"], $output_handler);
+                    $hyphash{$hyp}->{conn} = undef;
+                    return "failed";
     }
     #If still in function, haven't found any likely host entries, make a new one
     unless ($hyphash{$hyp}->{offline}) {
