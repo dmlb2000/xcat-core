@@ -84,7 +84,7 @@ sub process_request {
             $request->{node} = $noderange;
         }
 	}else{
-		$callback->({error=>["Well Kemosabi, I can't figure out who you are."],errorcode=>[1]});
+		$callback->({error=>["No node names are given, I cannot figure out who you are."],errorcode=>[1]});
 		return;
 	}
 
@@ -373,6 +373,8 @@ sub mergeArrays {
 			$attrs->{$_->{priority}} = $_->{directory};
 		}
 	}elsif($type =~ /file|image/){
+        
+        my $doesMtabExists = 0; 
 		foreach(@$arr){
 			next if($_->{file} eq '');
 			my $o = $_->{options};
@@ -380,9 +382,17 @@ sub mergeArrays {
 				if (xCAT::Utils->isAIX()) {
 					$o = "rw";  # default option if not provided
 				} else {
-					$o = "tempfs";
+					$o = "tmpfs";
 				}
 			}
+
+            if ($_->{file} eq "/etc/mtab") {
+                $doesMtabExists = 1;
+                # TODO
+                # let the user know the "link" option should be with
+                # /etc/mtab
+                $o = "link";
+            }
 
 			# TODO: put some logic in here to make sure that ro is alone.
 			# if type is ro and con, then this is wrong silly!
@@ -393,6 +403,11 @@ sub mergeArrays {
 			#}
 			$attrs->{$_->{file}} = $o;
 		}
+
+        if ($doesMtabExists eq 0) {
+            $attrs->{"/etc/mtab"} = "link";
+        }
+
 	}elsif($type =~ /location/){
 	    foreach(@$arr)
 	    {
