@@ -120,7 +120,7 @@ litefile => {
 },
 
 vm => {
-    cols => [qw(node host migrationdest storage cfgstore memory cpus nics bootorder clockoffset virtflags vncport textconsole powerstate beacon comments disable)],
+    cols => [qw(node host migrationdest storage cfgstore memory cpus nics bootorder clockoffset virtflags vncport textconsole powerstate beacon guestostype comments disable)],
     keys => [qw(node)],
     table_desc => 'Virtualization parameters',
     descriptions => {
@@ -145,6 +145,7 @@ vm => {
         'vncport' => 'Tracks the current VNC display port (currently not meant to be set',
         'textconsole' => 'Tracks the Psuedo-TTY that maps to the serial port or console of a VM',
         'powerstate' => "This flag is used by xCAT to track the last known power state of the VM.",
+        'guestostype' => "This allows administrator to specify an identifier for OS to pass through to virtualization stack.  Normally this should be ignored as xCAT will translate from nodetype.os rather than requiring this field be used\n",
         'beacon' => "This flag is used by xCAT to track the state of the identify LED with respect to the VM."
     }
 },
@@ -712,6 +713,8 @@ site => {
    " tftpdir:  tftp directory path. Default is /tftpdir\n\n".
    " useSSHonAIX:  (yes/1 or no/0). If yes, ssh/scp will be setup and used. If no,\n".
    "               rsh/rcp will be setup and used on AIX. Default is yes.\n\n".
+   " vcenterautojoin: When set to no, the VMWare plugin will not attempt to auto remove and add hypervisors while trying to perform operations.  If users or tasks outside of xCAT perform the joining this assures xCAT will not interfere.\n\n".
+   " vmwarereconfigonpower: When set to no, the VMWare plugin will make no effort to push vm.cpus/vm.memory updates from xCAT to VMWare\n\n".
    " rsh:  This is no longer used. path to remote shell command for xdsh.\n\n".
    " rcp:  This is no longer used. path to remote copy command for xdcp.\n\n".
    " SNsyncfiledir:  The directory on the Service Node, where xdcp will copy the files\n".
