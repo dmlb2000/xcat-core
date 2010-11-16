@@ -1135,6 +1135,7 @@ sub migrate {
         return;
     }
     my $target=$hyp; #case for storage migration
+    if ($datastoredest) { $datastoredest =~ s/=.*//; }#remove =scsi and similar if specified
     if ($datastoredest and scalar @ARGV) {
         sendmsg([1,"Unable to mix storage migration and processing of arguments ".join(' ',@ARGV)]);
         return;
