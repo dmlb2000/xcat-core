@@ -29,6 +29,10 @@
    The script will assume the default install paths of /opt/IBM/db2 for AIX and 
    /opt/ibm/db2 for Linux,  unless overridden with the XCATDB2INSPATH 
    environment variable. 
+   
+   -r flag will help you to remove DB2 from xCAT and uninstall DB2 from either
+   management node or service node. The flag -r and -S used together for 
+   management node, and -r and -C are used together for service node.
 =cut
 
 BEGIN
@@ -80,6 +84,7 @@ if (
                 'h|help'    => \$::HELP,
                 'v|version' => \$::VERSION,
                 'V|verbose' => \$::VERBOSE,
+                'r|rm'      => \$::RM,
     )
   )
 {
@@ -101,39 +106,8 @@ if ($::VERSION)
     xCAT::MsgUtils->message("I", $version);
     exit 0;
 }
-if ((!($::INIT)) && (!($::SETUPODBC)))
-{
-    xCAT::MsgUtils->message("I", "Either -i  or -o flag must be chosen");
-    &usage;
-    exit(1);
-}
-if ((!($::SERVER)) && (!($::CLIENT)))
-{
-    xCAT::MsgUtils->message("I", "Either -S  or -C flag must be chosen");
-    &usage;
-    exit(1);
-}
-if (($::SERVER) && ($::CLIENT))
-{
-    xCAT::MsgUtils->message("I", "Either -S  or -C flag must be chosen");
-    &usage;
-    exit(1);
-}
-if ((!($::SERVER)) && (!($::CLIENT)) && ($::SETUPODBC))
-{
-    xCAT::MsgUtils->message("I",
-                       "Either -S  or -C flag must be chosen with the -o flag");
-    &usage;
-    exit(1);
-}
 
-# check to see if only odbc update,  no passwords needed
-my $odbconly = 0;
-if ((!($::INIT)) && ($::SETUPODBC))
-{
-    $odbconly = 1;
 
-}
 
 #
 # Get OS
@@ -166,6 +140,49 @@ else
         $::installdb2dir = "/opt/ibm/db2/V9.7";    # default
     }
 }
+
+if ($::RM)
+{
+	&remove;
+	exit(0);
+}
+
+
+if ((!($::INIT)) && (!($::SETUPODBC)))
+{
+    xCAT::MsgUtils->message("I", "Either -i  or -o flag must be chosen");
+    &usage;
+    exit(1);
+}
+if ((!($::SERVER)) && (!($::CLIENT)))
+{
+    xCAT::MsgUtils->message("I", "Either -S  or -C flag must be chosen");
+    &usage;
+    exit(1);
+}
+if (($::SERVER) && ($::CLIENT))
+{
+    xCAT::MsgUtils->message("I", "-S  and -C flag should not be chosen together");
+    &usage;
+    exit(1);
+}
+
+if ((!($::SERVER)) && (!($::CLIENT)) && ($::SETUPODBC))
+{
+    xCAT::MsgUtils->message("I",
+                       "Either -S  or -C flag must be chosen with the -o flag");
+    &usage;
+    exit(1);
+}
+
+# check to see if only odbc update,  no passwords needed
+my $odbconly = 0;
+if ((!($::INIT)) && ($::SETUPODBC))
+{
+    $odbconly = 1;
+
+}
+
 
 #
 # check to see if DB2 is installed, in given location
@@ -244,6 +261,8 @@ if (($::INIT) && ($::xcatrunningdb2 == 0))
     if ($::SERVER)
     {    # setting up server
 
+        # makesure the daemon is running 
+        &startxcatd;
         #
         # Backup current database
         #
@@ -292,6 +311,7 @@ if (($::INIT) && ($::xcatrunningdb2 == 0))
         {
             xCAT::MsgUtils->message("E",
                                     "Hostname resolution for $hname failed.");
+            &startxcatd;
             exit(1);
         }
     }    # end setting up SERVER
@@ -372,17 +392,7 @@ if (($::INIT) && ($::xcatrunningdb2 == 0))
         #
         # start the daemon
         #
-        my $xcmd;
-        if ($::osname eq 'AIX')
-        {
-          $xcmd = "$::XCATROOT/sbin/restartxcatd";
-
-        }
-        else
-        {
-          $xcmd = "service xcatd restart";
-        }
-        system($xcmd);
+        &startxcatd;
         xCAT::MsgUtils->message("SI", "xCAT DB2 Client setup is complete.\n");
     }
 }    # end initialization
@@ -397,6 +407,7 @@ if ($::SETUPODBC)
     &setupODBC;
 
 }
+
 
 exit;
 
@@ -421,9 +432,34 @@ sub usage
         "Usage:\ndb2sqlsetup - Performs the setup of IBM DB2 for xCAT to use as its database. See man db2sqlsetup for more information."
         );
     my $msg =
-      "db2sqlsetup <-h|--help>\n           <-v|--version>\n           <-i|--init> <-S|-C> [-o|--setupODBC] [-V|--verbose]\n           <-o|--setupODBC> <-S|-C> [-V|--verbose]";
+      "db2sqlsetup <-h|--help>\n           <-v|--version>\n           <-i|--init> <-S|-C> [-o|--setupODBC] [-V|--verbose]\n           <-o|--setupODBC> <-S|-C> [-V|--verbose]\n           <-r|--rm> <-S|-C> [-V|--verbose]";
 
     xCAT::MsgUtils->message('I', "$msg");
+}
+#-----------------------------------------------------------------------------
+
+=head3    startxcatd 
+	
+  start the daemon 
+
+=cut
+
+#-----------------------------------------------------------------------------
+
+sub startxcatd 
+
+{
+   my $xcmd;
+   if ($::osname eq 'AIX')
+   {
+      $xcmd = "$::XCATROOT/sbin/restartxcatd";
+
+   }
+   else
+   {
+     $xcmd = "service xcatd restart";
+   }
+   system($xcmd);
 }
 
 #-----------------------------------------------------------------------------
@@ -1181,20 +1217,18 @@ sub setupODBC
     }
 
     # setup the odbcinst.ini file
-    my $linuxsharedlib="/var/lib/db2/sqllib/lib/libdb2o.so";
-    my $AIXsharedlib = "/var/lib/db2/sqllib/lib/libdb2.so";
+    my $sharedlib;
+    if ($::osname eq 'AIX') {
+        $sharedlib = "/var/lib/db2/sqllib/lib/libdb2.so";
+    } else {
+        $sharedlib="/var/lib/db2/sqllib/lib/libdb2o.so";
+    }
     $cmd = "fgrep -i  driver $odbcinstfile ";
     xCAT::Utils->runcmd($cmd, -1);
     if ($::RUNCMD_RC != 0)    # then driver entry not there
     {
-        my $entry;
-        if ($::osname eq 'AIX') {
-          $entry =
-           "[DB2]\nDescription = ODBC for DB2\nDriver      = $AIXsharedlib";
-        }else {
-          $entry =
-           "[DB2]\nDescription = ODBC for DB2\nDriver      = $linuxsharedlib";
-        }
+        my $entry =
+          "[DB2]\nDescription = ODBC for DB2\nDriver      = $sharedlib";
         $cmd = "echo \"$entry\" >> $odbcinstfile";
         xCAT::Utils->runcmd($cmd, 0);
         if ($::RUNCMD_RC != 0)
@@ -1230,6 +1264,7 @@ sub setupODBC
             xCAT::MsgUtils->message("E", "$message");
             exit(1);
         }
+
     }
     else
     {    # entry already there
@@ -1443,16 +1478,335 @@ sub restorexcatdb
     #
     # start the daemon
     #
-    my $xcmd;
+    &startxcatd;
+}
+
+#-----------------------------------------------------------------------------
+
+=head3   remove
+	   
+		remove DB2 on management node or service node. if you want to remove it 
+		from service node, you should use -s and -r flag together.
+	
+=cut
+
+#-----------------------------------------------------------------------------
+sub remove
+{
+	my $cmd;
+	my @output;
+	#see if DB2 is installed
+	if (!(-e ($::installdb2dir)))
+    {
+        my $message =
+          "\nDB2 is not installed.";
+        xCAT::MsgUtils->message("E", "$message");
+        exit(1);
+    }
+    
+    #see if xcat is using DB2
+    my $backupdic = "/xcatbackdb2";
+    my $xcatconfig = "/etc/xcat/cfgloc";
+    if (-e ($xcatconfig))
+    {
+        # if xcat is using DB2,and in management node backup database and remove db2 from xcat
+        my $cmd = "egrep -i \"^DB2:\" /etc/xcat/cfgloc";
+        xCAT::Utils->runcmd($cmd, -1);
+        if ($::RUNCMD_RC == 0)
+        {  
+            #if it is management node, need to backup database
+            if (!($::CLIENT))
+            {
+            	xCAT::MsgUtils->message("I","Begin to backup database, this would take a while");
+            	
+            	$cmd = "mkdir -p $backupdic";
+            	xCAT::Utils->runcmd($cmd, -1);
+            	if ($::RUNCMD_RC !=0)
+            	{
+            		my $message = "can't make a directory $backupdic, try again";
+            		xCAT::MsgUtils->message("E", "$message");
+            		$backupdic = "/xCATbackupDB";
+            		xCAT::Utils->runcmd($cmd, -1);
+            		if ($::RUNCMD_RC !=0)
+            		{
+            			my $message = "fail again, can not make a direcorty $backupdic";
+            			xCAT::MsgUtils->message("E", "$message");
+            			exit(1);
+            		}
+            	}
+            	
+            	my $cmd = "ps -elf|grep xcatd";
+                my @output = xCAT::Utils->runcmd($cmd, 0);
+                if ($::RUNCMD_RC == 0)
+                {      
+                    if ($::osname eq 'AIX')
+                    {
+                    	my $cmd = "startsrc -s xcatd";
+                    }
+                    else
+                    {           
+                    	my $cmd = "service xcatd start";
+                    }
+                    xCAT::Utils->runcmd($cmd, -1);
+            	    if ($::RUNCMD_RC !=0)
+            	    {
+            	    	my $message = "can't start xcatd";
+            	    	xCAT::MsgUtils->message("E", "$message");
+            	    	exit(1);
+            	    }
+                } 	        	
+            	
+            	
+            	my $cmd = "dumpxCATdb -p $backupdic";
+                xCAT::Utils->runcmd($cmd, -1);        	
+            	if ($::RUNCMD_RC !=0)
+            	{        	
+            		my $message = "can't dump xcatdb";
+            		xCAT::MsgUtils->message("E", "$message");        			
+            	    exit(1);
+            	}           	            	
+            }
+            
+            if ($::osname eq 'AIX')
+            {
+            	my $cmd = "stopsrc -s xcatd";
+            }
+            else
+            {           
+            	my $cmd = "service xcatd stop";
+            }
+            xCAT::Utils->runcmd($cmd, -1);
+            if ($::RUNCMD_RC !=0)
+            {
+            	my $message = "can't stop xcatd";
+            	xCAT::MsgUtils->message("E", "$message");
+            	exit(1);
+            }
+                	
+            
+            my $cmd = "rm -rf /etc/xcat/cfgloc";
+            xCAT::Utils->runcmd($cmd, -1);
+            if ($::RUNCMD_RC !=0)
+            {
+            	my $message = "can't remove cfgloc file";
+            	xCAT::MsgUtils->message("E", "$message");
+            	exit(1);
+            }
+                	
+            if (!($::CLIENT))
+            {        	
+                my $cmd = "XCATBYPASS=1 restorexCATdb -p $backupdic";
+                xCAT::Utils->runcmd($cmd, -1);   
+                if ($::RUNCMD_RC != 0)
+                {     	
+                	my $message = "can't restore xcat database";
+                	xCAT::MsgUtils->message("E", "$message");
+                	exit(1);
+                }
+                
+            }
+            
+            
+            if ($::osname eq 'AIX')
+            {
+            	my $cmd = "startsrc -s xcatd";
+            }
+            else
+            {           
+            	my $cmd = "service xcatd start";
+            }
+            xCAT::Utils->runcmd($cmd, -1);
+            if ($::RUNCMD_RC !=0)
+            {
+            	my $message = "can't start xcatd";
+            	xCAT::MsgUtils->message("E", "$message");
+            }
+
+            xCAT::MsgUtils->message("I", "Have remove DB2 from xCAT. \n");              
+        }
+    }
+            
+
+    xCAT::MsgUtils->message("I", "Begin to remove DB2 \n");  
+    if (!($::CLIENT))
+    { 
+        #remove database
+        my $cmd = "db2 force application all";
+        my $rc = &rundb2cmd($cmd);
+        if ($rc != 0)
+        {
+            xCAT::MsgUtils->message("W", " $cmd failed. \n");
+            #exit(1);
+        }
+        
+        my $cmd = "db2 drop database xcatdb";
+        $rc = &rundb2cmd($cmd);
+        if ($rc != 0)
+        {
+            xCAT::MsgUtils->message("W", " $cmd failed.\n");
+            #exit(1);
+        }
+        else
+        {
+            xCAT::MsgUtils->message("W", "db2 stop \n.");
+        }
+        
+        my $cmd = "db2stop";
+        $rc = &rundb2cmd($cmd);
+        if ($rc != 0)
+        {
+            xCAT::MsgUtils->message("W", " $cmd failed. \n");
+            #exit(1);
+        } 
+        
+    }
+    #remove instance
+    $cmd = $::installdb2dir;
+    $cmd = $cmd."/instance/db2idrop xcatdb";
+    xCAT::Utils->runcmd($cmd, -1);
+    if ($::RUNCMD_RC !=0) 
+    {
+   	     my $message = "can't drop DB2 instance \n";
+   	     xCAT::MsgUtils->message("E", "$message");
+   	     exit(1);
+    }
+    
+    #check if all the instances have been removed
+    $cmd = $::installdb2dir;
+    $cmd = $cmd."/instance/db2ilist";
+    xCAT::Utils->runcmd($cmd, -1);
+    if ($::RUNCMD_RC !=0) 
+    {
+   	     my $message = "there is still instance, can't uninstall DB2\n";
+   	     xCAT::MsgUtils->message("E", "$message");
+    }    
+    else
+    {
+        #uninstall DB2
+        $cmd = $::installdb2dir;
+        $cmd = $cmd."/install/db2_deinstall -a";        	    
+        xCAT::Utils->runcmd($cmd, -1);
+        if ($::RUNCMD_RC !=0) 
+        {
+   	        my $message = "can't uninstall DB2 \n";
+   	        xCAT::MsgUtils->message("E", "$message");
+   	        #exit(1);
+        }        	                                 
+        xCAT::MsgUtils->message("I", "Remove DB2 successfully, begin to cleanup the enviroment. \n");
+    }        
+    
+      
+    #unconfig enviroment
+    $cmd = "egrep -i \"^db2c_xcatdb\" /etc/services";
+    xCAT::Utils->runcmd($cmd, -1);
+    my $file1 = "/etc/services";
+    if ($::RUNCMD_RC == 0)
+    {  
+        open(FH,"+<$file1") or die "cannot open file $file1 \n";   
+        $cmd = "touch /etc/services.back";
+        xCAT::Utils->runcmd($cmd, -1);
+        open(DH,"+</etc/services.back") or die "cannot open file services.back \n";  
+        foreach (<FH>)
+        {
+        	my $line = $_;
+            if($line =~ /xcatdb/)
+            {
+                $line =~ s/$line/# $line/;
+             }
+             print DH $line;
+        }
+        close(FH);
+        close(DH);
+        $cmd = "mv /etc/services.back $file1";
+        xCAT::Utils->runcmd($cmd, -1);          
+        #$cmd = "cat $file1 | sed s/.*xcatdb.*// > $file1";
+        #xCAT::Utils->runcmd($cmd, -1);        
+    }
+    
+    
     if ($::osname eq 'AIX')
     {
-        $xcmd = "startsrc -s xcatd";
-
+        $cmd = "rmuser xcatdb";
     }
     else
     {
-        $xcmd = "service xcatd start";
+        $cmd = "userdel -f xcatdb";
     }
-    system($xcmd);
+    xCAT::Utils->runcmd($cmd, -1);
+    if ($::RUNCMD_RC != 0)
+    {
+   	    my $message = "can't remove user xcatdb \n";
+   	    xCAT::MsgUtils->message("E", "$message");
+    }                 	
+
+    if ($::osname eq 'AIX')
+    {
+        $cmd = "rmgroup xcatdb";
+    }
+    else
+    {
+        $cmd = "groupdel xcatdb";
+    }    
+    xCAT::Utils->runcmd($cmd, -1);
+    if ($::RUNCMD_RC != 0)
+    {
+   	    my $message = "can't remove group xcatdb \n";
+   	    xCAT::MsgUtils->message("E", "$message");
+    }  
+   
+   
+    $cmd = "rm -rf ";
+    $cmd = $cmd.$::installdb2dir;	
+    xCAT::Utils->runcmd($cmd, -1);
+    if ($::RUNCMD_RC != 0)
+    {
+   	    my $message = "can't remove the directory $::installdb2dir  /db2/V9.7 \n";
+   	    xCAT::MsgUtils->message("E", "$message");
+    }
+   
+    $cmd = "rm -rf /var/lib/db2/*";	
+    xCAT::Utils->runcmd($cmd, -1);
+    if ($::RUNCMD_RC != 0)
+    {
+   	    my $message = "can't remove the directory /var/lib/db2 \n*";
+   	    xCAT::MsgUtils->message("E", "$message");
+    }
+   
+    my $file2;
+    if ($::osname eq 'AIX')
+    {
+    	$file2 = "/etc/profile";
+    }
+    else
+    {   
+    	$file2 = "/etc/profile.d/xcat.sh";
+    }  
+    
+    
+    open(FH,"+<$file2") or die "cannot open file $file2 \n";   
+    $cmd = "touch /etc/tmp.back";
+    xCAT::Utils->runcmd($cmd, -1);
+    open(DH,"+</etc/tmp.back") or die "cannot open file tmp.back \n";  
+    foreach (<FH>)
+    {
+    	my $line = $_;
+        if(($line =~ /xcatdb/) or ($line =~ /EXTSHM/))
+        {
+            $line =~ s/$line/# $line/;
+         }
+         print DH $line;
+    }
+    close(FH);
+    close(DH);
+    $cmd = "mv /etc/tmp.back $file2";
+    xCAT::Utils->runcmd($cmd, -1);   
+           
+    #$cmd = "cat $file2 | sed s/.*xcatdb.*// > $file2";
+    #xCAT::Utils->runcmd($cmd, -1);
+    #$cmd = "cat $file2 | sed s/.*EXTSHM.*// > $file2";        
+    #xCAT::Utils->runcmd($cmd, -1);
+        
+    xCAT::MsgUtils->message("I", "Cleanup completely finished. \n");        
+    
 }
 
