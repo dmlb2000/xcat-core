@@ -2255,7 +2255,16 @@ sub process_request {
         push @dhcpnodes,$_;
         delete $confdata->{dhcpneeded}->{$_};
      }
-     $doreq->({command=>['makedhcp'],node=>\@dhcpnodes});
+     my $do_dhcpsetup=1;
+     if ($sitetab) {
+         (my $ref) = $sitetab->getAttribs({key => 'dhcpsetup'}, 'value');
+         if ($ref and $ref->{value} =~ /^0|n|d/i) {
+             $do_dhcpsetup=0;
+         }
+     }
+     if ($do_dhcpsetup) {
+        $doreq->({command=>['makedhcp'],node=>\@dhcpnodes});
+     }
   }
 
   if ($command eq 'revacuate' or $command eq 'rmigrate') {
