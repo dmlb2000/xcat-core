@@ -542,6 +542,7 @@ sub scan_plugins {
     ${"xCAT_plugin::".$modname."::"}{init_plugin}->(\&do_request);
   }
 }
+$dbmaster=xCAT::Table::init_dbworker;
 scan_plugins;
 unless (xCAT::Utils->isLinux()) {	# messes up the output of the service cmd on linux
 	eval {
@@ -556,7 +557,6 @@ unless ($foreground) {
    daemonize;
 }
 
-$dbmaster=xCAT::Table::init_dbworker;
 my $CHILDPID=0; #Global for reapers
 my %immediatechildren;
 sub generic_reaper {
