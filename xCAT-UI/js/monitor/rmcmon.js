@@ -3,6 +3,7 @@ var globalNodesDetail;
 var globalAllNodesNum = 0;
 var globalFinishNodesNum = 0;
 var globalSelectedAttributes = '';
+var globalTimeStamp;
 
 function loadRmcMon(){
 	//find the rmcmon tab
@@ -226,7 +227,17 @@ function loadRmcMonShow(){
 			showRmcSummary(data.rsp[0]);
 		}
 	});
-	
+}
+
+function showRmcSummary(returnData){
+	var attributes = returnData.split(';');
+	var attr;
+	var attrName;
+	var attrValues;
+	var attrDiv;
+	var summaryTable = $('<table><tbody></tbody></table>');
+	var summaryRow;
+	globalTimeStamp = new Array();
 	//load each nodes' status
 	$.ajax({
 		url : 'lib/cmd.php',
@@ -242,18 +253,17 @@ function loadRmcMonShow(){
 			parseRmcData(data.rsp);
 		}		
 	});
-}
-
-function showRmcSummary(returnData){
-	var attributes = returnData.split(';');
-	var attr;
-	var attrName;
-	var attrValues;
-	var attrDiv;
-	var summaryTable = $('<table><tbody></tbody></table>');
-	var summaryRow;
 	
-
+	//create the timestamp, the flot only use the UTC time, so had to change the value, to show the right time
+	var tempDate = new Date();	
+	var tempOffset = tempDate.getTimezoneOffset();
+	var tempTime = tempDate.getTime() - 3600000 - tempOffset * 60000;
+	
+	for (var i = 0; i < 60; i++){
+		globalTimeStamp.push(tempTime + i * 60000);
+	}
+	
+	//show the summary data
 	$('#rmcmonSummary').empty().append('<h3>Overview</h3><hr />');
 	$('#rmcmonSummary').append(summaryTable);
 	
@@ -264,7 +274,7 @@ function showRmcSummary(returnData){
 		attrName = attributes[attr].substr(0, temp);
 		attrValues = attributes[attr].substr(temp + 1).split(',');
 		for (var i in attrValues){
-			tempArray.push([i, attrValues[i]]);
+			tempArray.push([globalTimeStamp[i], attrValues[i]]);
 		}
 
 		if (0 == (attr % 3)){
@@ -274,7 +284,7 @@ function showRmcSummary(returnData){
 		summaryRow.append(tempTd);
 		attrDiv = $('<div class="monitorsumdiv"></div>');
 		tempTd.append(attrDiv);
-		$.plot(attrDiv, [tempArray]);
+		$.plot(attrDiv, [tempArray], {xaxis: {mode:"time"}});
 		attrDiv.append('<center>' + attrName + '</center>');
 		
 	}	
@@ -429,9 +439,9 @@ function showAllNodes(attrName, type){
 		var tempData = sortArray[sortIndex]['value'].split(',');
 		var tempArray = [];
 		for (var i in tempData){
-			tempArray.push([i, tempData[i]]);				
+			tempArray.push([globalTimeStamp[i], tempData[i]]);				
 		}
-		$.plot(nodeChat, [tempArray]);
+		$.plot(nodeChat, [tempArray], {xaxis: {mode:"time", tickSize: [20, "minute"]}});
 
 		tempTd.append('<center>' + sortArray[sortIndex]['name'] + '</center>');
 		tempTd.css('cursor', 'pointer');
@@ -474,10 +484,10 @@ function showNode(nodeName){
 		var tempData = globalNodesDetail[nodeName][attr].split(',');
 		var tempArray = [];
 		for (var i in tempData){
-			tempArray.push([i, tempData[i]]);				
+			tempArray.push([globalTimeStamp[i], tempData[i]]);				
 		}
 		
-		$.plot(attrChat, [tempArray]);
+		$.plot(attrChat, [tempArray], {xaxis: {mode:"time", tickSize: [20, "minute"]}});
 		attrChat.append('<center>' + attr +'</center>');
 	}
 }
@@ -612,4 +622,136 @@ function showConfigureDia(){
 				 }
 		}
 	});
+}
+
+/**
+ * load the rmc event tab.
+ * 
+ * @param 
+
+ * @return
+ *        
+ */
+function loadRmcEvent(){
+	//find the rmcevent tab
+	
+	//add the stauts bar first. id = 'rmcMonStatus'
+	var rmcStatusBar = createStatusBar('rmcEventStatus');
+	rmcStatusBar.append(createLoader());
+	$('#rmcevent').append(rmcStatusBar);
+	$('#rmcevent').append('<div id="rmcEventDiv"></div>');
+	
+	$.ajax( {
+		url : 'lib/cmd.php',
+		dataType : 'json',
+		data : {
+			cmd : 'webrun',
+			tgt : '',
+			args : 'lsevent;-O;1000',
+			msg : ''
+		},
+
+		success : showEventLog
+	});
+}
+
+/*===========RMC Event Tab============*/
+/**
+ * show all the event in the rmc event tab 
+ * 
+ * @param data response from the xcat server.
+
+ * @return
+ *        
+ */
+function showEventLog(data){
+	$('#rmcEventStatus').empty();
+	//rsct not installed.
+	if (data.rsp[0] && (-1 != data.rsp[0].indexOf('lsevent'))){
+		$('#rmcEventStatus').append('Please install RSCT first!');
+		return;
+	}
+	var eventDiv = $('#rmcEventDiv');
+	eventDiv.empty();
+	
+	//add the configure button
+	loadRmcEventConfig();
+	
+	var eventTable = new DataTable('lsEventTable');
+	eventTable.init(['Time', 'Type', 'Content']);
+	
+	for(var i in data.rsp){
+		var row = data.rsp[i].split(';');
+		eventTable.add(row);
+	}
+	
+	eventDiv.append(eventTable.object());
+	$('#lsEventTable').dataTable({
+		'bFilter' : true,
+		'bLengthChange' :true,
+		'bSort' :true,
+		'bPaginate' :true,
+		'iDisplayLength' :10
+	});
+	
+	//unsort on the content column
+	$('#lsEventTable thead tr th').eq(2).unbind('click');
+}
+
+/**
+ * Add the configure button into rmc event tab
+ * 
+ * @param 
+
+ * @return
+ *        
+ */
+function loadRmcEventConfig(){
+	var mkConResBut = createButton('Make Association');
+	mkConResBut.bind('click', function(){
+		mkCondRespDia();
+	});
+	
+	$('#rmcEventDiv').append(mkConResBut);
+}
+
+/**
+ * show the make association dialogue
+ * 
+ * @param 
+
+ * @return
+ *        
+ */
+function mkCondRespDia(){
+	var diaDiv = $('<div title="Make Association"><div>');
+	diaDiv.append('under construction.');
+	
+	diaDiv.dialog({
+		 modal: true,
+         width: 400,
+         close: function(event, ui){
+					$(this).remove();
+				},
+		buttons: {
+			cancel : function(){
+				$(this).dialog('close');
+			},
+			ok : function(){
+				$(this).dialog('close');
+			}
+		}
+	});
+}
+
+/**
+ * show the remove association dialogue
+ * 
+ * @param 
+
+ * @return
+ *        
+ */
+function rmCondRespDia(){
+	
 }

@@ -138,7 +138,7 @@ function createGraphical(bpa, fsp, area){
 		elementNum ++;
 		var td = $('<td style="padding:0;border-color: transparent;"></td>');
 		var frameDiv = $('<div class="frameDiv"></div>');
-		frameDiv.append('<div style="height:27px;">' + bpaName + '</div>');
+		frameDiv.append('<div style="height:27px;" title="' + bpaName + '"><input type="checkbox" class="fspcheckbox" name="check_'+ bpaName +'"></div>');
 		for (var fspIndex in bpa[bpaName]){
 			var fspName = bpa[bpaName][fspIndex];
 			usedFsp[fspName] = 1;
@@ -184,13 +184,13 @@ function createGraphical(bpa, fsp, area){
 		}
 		elementNum ++;
 
-		var td = $('<td style="vertical-align:top;border-color: transparent;"></td>');
+		var td = $('<td style="padding:0;vertical-align:top;border-color: transparent;"></td>');
 		td.append(createFspDiv(fspName, fsp[fspName]['mtm'], fsp));
 		td.append(createFspTip(fspName, fsp[fspName]['mtm'], fsp));
 		row.append(td);
 	}
 	
-	var selectNodeDiv = $('<div id="selectNodeDiv" style="margin: 20px;"></div>');
+	var selectNodeDiv = $('<div id="selectNodeDiv" style="margin: 20px;">Nodes:</div>');
 	var temp = 0;
 	for (var i in selectNode){
 		temp ++;
@@ -227,9 +227,9 @@ function createGraphical(bpa, fsp, area){
 	});
 	
 	$('.fspDiv2, .fspDiv4, .fspDiv42').tooltip({
-		position: "top center",
+		position: "center right",
 		relative : true,
-		offset : [20, 40],
+		offset : [10, 10],
 		effect: "fade"
 	});
 	
@@ -265,71 +265,19 @@ function createGraphical(bpa, fsp, area){
 		
 		updateSelectNodeDiv();
 	});
-}
-
-/**
- * show the fsp's information in a dialog
- * 
- * @param fspName : fsp's name
- *        
- * @return
- */
-function showSelectDialog(lpars){
-	var diaDiv = $('<div class="tab" title=Select Lpars"></div>');
 	
-	if (0 == lpars.length){
-		diaDiv.append(createInfoBar('There is not any lpars be selected(defined).'));
-	}
-	else{
-		//add the dialog content
-		var selectTable = $('<table id="selectNodeTable"><tbody></tbody></table>');
-		selectTable.append('<tr><th><input type="checkbox" onclick="selectAllLpars($(this))"></input></th><th>Name</th><th>Status</th></tr>');
-		for (var lparIndex in lpars){
-			var row = $('<tr></tr>');
-			var lparName = lpars[lparIndex];
-			var color = statusMap(lparList[lparName]);
-			
-			if (selectNode[lparName]){
-				row.append('<td><input type="checkbox" checked="checked" name="' + lparName + '"></input></td>');
-			}
-			else{
-				row.append('<td><input type="checkbox" name="' + lparName + '"></input></td>');
-			}
-			row.append('<td>' + lparName + '</td>');
-			row.append('<td style="background-color:' + color + ';">' + lparList[lparName] + '</td>');
-			selectTable.append(row);
+	$('.fspcheckbox').bind('click', function(){
+		var itemName = $(this).attr('name');
+		name = itemName.substr(6);
+		
+		if ($(this).attr('checked')){
+			selectNode[name] = 1;
 		}
-		diaDiv.append(selectTable);
-	}
-	
-	diaDiv.dialog({
-		modal: true,
-		width: 400,
-		close: function(event, ui){
-				$(this).remove();
-		},
-		buttons: {
-			cancel : function(){
-			 			$(this).dialog('close');
-		 			 },
-			ok : function(){
-	 				$('#selectNodeTable input[type=checkbox]').each(function(){
-	 					var lparName = $(this).attr('name');
-	 					if ('' == lparName){
-	 						//continue
-	 						return true;
-	 					}
-	 					if (true == $(this).attr('checked')){
-	 						changeNode(lparName, 'select');
-	 					}
-	 					else{
-	 						changeNode(lparName, 'unselect');
-	 					}
-	 				});
-	 				updateSelectNodeDiv();
-			     	$(this).dialog('close');
-				 }
+		else{
+			delete selectNode[name];
 		}
+		
+		updateSelectNodeDiv();
 	});
 }
 
@@ -346,7 +294,7 @@ function updateSelectNodeDiv(){
 
 	//add buttons
 	
-	$('#selectNodeDiv').append('Lpars: ');
+	$('#selectNodeDiv').append('Nodes: ');
 	for(var lparName in selectNode){
 		$('#selectNodeDiv').append(lparName + ' ');
 		temp ++;
@@ -355,13 +303,6 @@ function updateSelectNodeDiv(){
 			break;
 		}
 	}
-	
-	var reselectButton = createButton('Reselect');
-	$('#selectNodeDiv').append(reselectButton);
-	reselectButton.bind('click', function(){
-		reselectNodes();
-	});
-	
 }
 
 /**
@@ -500,12 +441,20 @@ function createActionMenu(){
 		}
 	});
 
-	//Open the Rcons page
-	var rcons = $('<a>Open Rcons</a>');
+	//Remote console
+	var rcons = $('<a>Open console</a>');
 	rcons.bind('click', function(event){
 		var tgtNodes = getSelectNodes();
 		if (tgtNodes) {
 			loadRconsPage(tgtNodes);
+		}
+	});
+	
+	//Edit properties
+	var editProps = $('<a>Edit properties</a>');
+	editProps.bind('click', function(event){
+		for (var node in selectNode) {
+			loadEditPropsPage(node);
 		}
 	});
 
@@ -517,7 +466,7 @@ function createActionMenu(){
 
 	// Advanced actions
 	var advancedActions;
-	advancedActions = [ boot2NetworkLnk, scriptLnk, setBootStateLnk, updateLnk, rcons ];
+	advancedActions = [ boot2NetworkLnk, scriptLnk, setBootStateLnk, updateLnk, rcons, editProps ];
 	var advancedActionMenu = createMenu(advancedActions);
 
 	/**
@@ -553,7 +502,7 @@ function createFspDiv(fspName, mtm, fsp){
 		}
 		var lparName = fsp[fspName]['children'][lparIndex];
 		var color = statusMap(lparList[lparName]);
-		lparStatusRow += '<td class="lparStatus" style="background-color:' + color + ';color:' + color + ';padding: 0px;font-size:1;border-width: 1px;border-style: solid;" name="' + lparName + '">1</td>';
+		lparStatusRow += '<td class="lparStatus" style="background-image:url(images/' + color + '.gif);padding: 0px;" name="' + lparName + '"></td>';
 	}
 	
 	//select the backgroud
@@ -566,7 +515,8 @@ function createFspDiv(fspName, mtm, fsp){
 	}
 		
 	//create return value
-	var retHtml = '<div value="' + fspName + '" class="' + divClass + '">';
+	var retHtml = '<input style="margin:3px 3px 1px 4px;padding:0;" class="fspcheckbox" type="checkbox" name="check_' + fspName + '">';
+	retHtml += '<div value="' + fspName + '" class="' + divClass + '">';
 	retHtml += '<div class="lparDiv"><table><tbody><tr>' + lparStatusRow + '</tr></tbody></table></div></div>';
 	return retHtml;
 }
@@ -632,6 +582,7 @@ function statusMap(status){
 		}
 		break;
 		default:
+			color = 'grey';
 			break;
 	}
 	
@@ -669,23 +620,6 @@ function getSelectNodes(){
 }
 
 /**
- * show all lpars' for users to delete 
- * 
- * @param 
-
- * @return 
- */
-function reselectNodes(){
-	var temp = new Array();
-	
-	for (var lparName in selectNode){
-		temp.push(lparName);
-	}
-	
-	showSelectDialog(temp);
-}
-
-/**
  * when the node is selected or unselected, then update the area on cec, update the global
  * list and update the tooltip table 
  * 
@@ -694,14 +628,18 @@ function reselectNodes(){
  * @return 
  */
 function changeNode(lparName, status){
+	var imgUrl = '';
+	var checkFlag = true;
 	if ('select' == status){
 		selectNode[lparName] = 1;
-		$('#graphTable [name=' + lparName + ']').css('border-color', 'aqua');
-		$('.tooltip input[name="' + lparName + '"]').attr('checked', true);
+		imgUrl = 'url(images/s-'+ statusMap(lparList[lparName]) + '.gif)';
+		checkFlag = true;
 	}
 	else{
 		delete selectNode[lparName];
-		$('#graphTable [name=' + lparName + ']').css('border-color', '#BDBDBD');
-		$('.tooltip input[name="' + lparName + '"]').attr('checked', false);
+		imgUrl = 'url(images/'+ statusMap(lparList[lparName]) + '.gif)';
+		checkFlag = false;
 	}
+	$('#graphTable [name=' + lparName + ']').css('background-image', imgUrl);
+	$('.tooltip input[name="' + lparName + '"]').attr('checked', checkFlag);
 }
