@@ -53,7 +53,7 @@ sub process_request {
 		'gangliastop'   => \&web_gangliastop,
 		'gangliastatus' => \&web_gangliastatus,
 		'gangliacheck' => \&web_gangliacheck,
-
+		'mkcondition'   => \&web_mkcondition,
 		#'xdsh' => \&web_xdsh,
 		#THIS list needs to be updated
 	);
@@ -154,74 +154,175 @@ sub web_lsrsrc {
 
 sub web_mkcondresp {
 	my ( $request, $callback, $sub_req ) = @_;
-	print Dumper( $request->{arg}->[0] );    #debug
-	my $ret = system( $request->{arg}->[0] );
+	my $conditionName = $request->{arg}->[1];
+	my $temp = $request->{arg}->[2];
+	my $cmd = '';
 
-	#there's no output for "mkcondresp"
-	#TODO
-	if ($ret) {
-
-		#failed
+	my @resp = split(':', $temp);
+	#create new associations
+	if (1 < length(@resp[0])){
+		$cmd = substr(@resp[0], 1);
+		$cmd =~ s/,/ /;
+		$cmd = 'mkcondresp ' . $conditionName . ' ' . $cmd;
+		my $retInfo = xCAT::Utils->runcmd($cmd, -1, 1);
 	}
+
+	#delete old associations
+	if (1 < length(@resp[1])){
+		$cmd = substr(@resp[1], 1);
+		$cmd =~ s/,/ /;
+		$cmd = 'rmcondresp ' . $conditionName . ' ' . $cmd;
+		my $retInfo = xCAT::Utils->runcmd($cmd, -1, 1);
+	}
+	#there's no output for "mkcondresp"
+	$callback->({ data => "Success." });
 }
 
 sub web_startcondresp {
 	my ( $request, $callback, $sub_req ) = @_;
-	print Dumper( $request->{arg}->[0] );    #debug
-	my $ret = system( $request->{arg}->[0] );
-	if ($ret) {
-
-		#to handle the failure
-	}
+	my $conditionName = $request->{arg}->[1];
+	my $cmd = 'startcondresp "' . $conditionName . '"';
+	my $retInfo = xCAT::Utils->runcmd($cmd, -1, 1);
+	$callback->({ data => 'start monitor "' . $conditionName .  '" Successful.' });
 }
 
 sub web_stopcondresp {
 	my ( $request, $callback, $sub_req ) = @_;
-	print Dumper( $request->{arg}->[0] );    #debug
-	my $ret = system( $request->{arg}->[0] );
-	if ($ret) {
-
-		#to handle the failure
-	}
+	my $conditionName = $request->{arg}->[1];
+	my $cmd = 'stopcondresp "' . $conditionName . '"';
+	my $retInfo = xCAT::Utils->runcmd($cmd, -1, 1);
+	$callback->({ data => 'stop monitor "' . $conditionName .  '" Successful.' });
 }
 
 sub web_lscond {
 	my ( $request, $callback, $sub_req ) = @_;
-	my $ret = `lscondition`;
+	my $nodeRange = $request->{arg}->[1];
+	my $names = '';
 
-	my @lines = split '\n', $ret;
-	shift @lines;
-	shift @lines;
-	foreach my $line (@lines) {
-		$callback->( { data => $line } );
+	#list all the conditions on all lpars in this group 
+	if ($nodeRange && ('-' ne substr($nodeRange, 0, 1))){
+		my @nodes = xCAT::NodeRange::noderange($nodeRange);
+		my %tempHash;
+		my $nodeCount = @nodes;
+		#no node in this group
+		if (1 > $nodeCount){
+			return;
+		}
+
+		#no conditions return
+		my $tempCmd = 'lscondition -d :' . join(',', @nodes);
+		my $retInfo = xCAT::Utils->runcmd($tempCmd, -1, 1);
+		if (1 > @$retInfo){
+			return;
+		}
+
+		shift @$retInfo;
+		shift @$retInfo;
+
+		foreach my $line (@$retInfo){
+			my @temp = split(':', $line);
+			$tempHash{@temp[0]}++;
+		}
+
+		foreach my $name (keys (%tempHash)){
+			if ($nodeCount == $tempHash{$name}){
+				$names = $names . $name . ';';
+			}
+		}
 	}
+	#only list the conditions on local.
+	else{
+		my $option = '';
+		if ($nodeRange){
+			$option = $nodeRange;
+		}
+		my $retInfo = xCAT::Utils->runcmd('lscondition -d ' . $option, -1, 1);
 
+		if (2 > @$retInfo){
+			return;
+		}
+		
+		shift @$retInfo;
+		shift @$retInfo;
+		foreach my $line (@$retInfo) {
+			my @temp = split(':', $line);
+			$names = $names . @temp[0] . ';';		
+		}		
+	}
+	if ('' eq $names){
+		return;
+	}
+	$names = substr($names, 0, (length($names) - 1));
+	
+	$callback->( { data => $names } );
+}
+
+sub web_mkcondition{
+	my ( $request, $callback, $sub_req ) = @_;
+
+	if ('change' eq $request->{arg}->[1]){
+		my @nodes;
+		my $conditionName = $request->{arg}->[2];
+		my $groupName = $request->{arg}->[3];
+
+		my $retInfo = xCAT::Utils->runcmd('nodels ' . $groupName . " nodetype.nodetype", -1, 1);
+		foreach my $line (@$retInfo){
+			my @temp = split(':', $line);
+			if (@temp[1] !~ /lpar/){
+				$callback->( { data => 'Error : only the compute nodes\' group could select.' } );
+				return;
+			}
+			push (@nodes, @temp[0]);
+		}
+
+		xCAT::Utils->runcmd('chcondition -n ' + join(',', @nodes) + '-m m ' + $conditionName);
+		$callback->( { data => 'Change scope success.' } );
+	}
+	
 }
 
 sub web_lsresp {
 	my ( $request, $callback, $sub_req ) = @_;
-	my $ret = `lsresponse`;
-	my @resps;
+	my $names = '';
+	my @temp;
+	my $retInfo = xCAT::Utils->runcmd('lsresponse -d', -1, 1);
 
-	my @lines = split '\n', $ret;
-	shift @lines;
-	shift @lines;
-
-	foreach my $line (@lines) {
-		$callback->( { data => $line } );
+	shift @$retInfo;
+	shift @$retInfo;
+	foreach my $line (@$retInfo) {
+		@temp = split(':', $line);
+		$names = $names . @temp[0] . ';';
 	}
+
+	$names = substr($names, 0, (length($names) - 1));
+	$callback->( { data => $names } );
 }
 
 sub web_lscondresp {
 	my ( $request, $callback, $sub_req ) = @_;
-	my @ret = `lscondresp`;
-	shift @ret;
-	shift @ret;
+	my $names = ''; 
+	my @temp;
+	#if there is condition name, then we only show the condition linked associations.
+	if ($request->{arg}->[1]){
+		my $cmd = 'lscondresp -d ' . $request->{arg}->[1];
+		my $retInfo = xCAT::Utils->runcmd($cmd, -1, 1);
+		if (2 > @$retInfo){
+			$callback->( { data => '' } );
+			return;
+		}
 
-	foreach my $line (@ret) {
-		chomp $line;
-		$callback->( { data => $line } );
+		shift @$retInfo;
+		shift @$retInfo;
+		for my $line (@$retInfo){
+			@temp = split(':', $line);
+			$names = $names . @temp[1] . ';';
+		}
 	}
+	else{
+	}
+
+	$names = substr($names, 0, (length($names) - 1));
+	$callback->( { data => $names } );
 }
 
 sub web_gettab {

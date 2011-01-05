@@ -43,7 +43,7 @@ zvmPlugin.prototype.loadClonePage = function(node) {
 
 		// Get hardware control point
 		var nodeRow = $('#' + node).parent().parent();
-		var dTable = $('#nodesDataTable').dataTable();
+		var dTable = $('#nodesDatatable').dataTable();
 		var rowPos = dTable.fnGetPosition(nodeRow.get(0));
 		var aData = dTable.fnGetData(rowPos);
 		var hcp = aData[hcpCol];
@@ -588,7 +588,6 @@ zvmPlugin.prototype.loadInventory = function(data) {
 			
 			procFooter.append(addProcLink);
 			procTable.append(procFooter);
-
 			item.append(procTable);
 		}
 
@@ -648,7 +647,6 @@ zvmPlugin.prototype.loadInventory = function(data) {
     				dasdLink.contextMenu(contextMenu, {
     					theme : 'vista'
     				});
-    
     				dasdVDev.append(dasdLink);
     
     				dasdType = $('<td>' + args[2] + '</td>');
@@ -739,7 +737,6 @@ zvmPlugin.prototype.loadInventory = function(data) {
     				nicLink.contextMenu(contextMenu, {
     					theme : 'vista'
     				});
-    
     				nicVDev.append(nicLink);
     
     				nicType = $('<td>' + args[3] + '</td>');
@@ -747,8 +744,7 @@ zvmPlugin.prototype.loadInventory = function(data) {
     				nicNumOfDevs = $('<td>' + args[args.length - 1] + '</td>');
     
     				args = attrs[keys[k]][l + 1].split(' ');
-    				nicLanName = $('<td>' + args[args.length - 2] + ' '
-    					+ args[args.length - 1] + '</td>');
+    				nicLanName = $('<td>' + args[args.length - 2] + ' ' + args[args.length - 1] + '</td>');
     
     				// Create a new row for each DASD
     				nicTabRow = $('<tr></tr>');

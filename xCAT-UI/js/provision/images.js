@@ -43,8 +43,7 @@ function loadImages(data) {
 	// Image attributes
 	var headers = new Object();
 	
-	// Clear cookie containing list of images where their attributes 
-	// need to be updated
+	// Clear cookie containing list of images where their attributes need to be updated
 	$.cookie('images2update', '');
 	// Clear hash table containing image attributes
 	origAttrs = '';
@@ -131,9 +130,9 @@ function loadImages(data) {
 	 */
 
 	// Create copy Linux button
-	var copyLinuxBtn = createButton('Copy Linux');
+	var copyLinuxBtn = createButton('Copy CD');
 	copyLinuxBtn.bind('click', function(event) {
-		loadCopyLinuxPage();
+		loadCopyCdPage();
 	});
 	
 	// Create edit button
@@ -193,6 +192,7 @@ function loadImages(data) {
 	/**
 	 * Enable editable columns
 	 */
+	
 	// Do not make 1st, 2nd, 3rd, 4th, or 5th column editable
 	$('#imagesDataTable td:not(td:nth-child(1),td:nth-child(2))').editable(
 		function(value, settings) {	
@@ -330,8 +330,7 @@ function updateImageAttrs() {
 		} // End of if
 	} // End of for
 	
-	// Clear cookie containing list of images where
-	// their attributes need to be updated
+	// Clear cookie containing list of images where their attributes need to be updated
 	$.cookie('images2update', '');
 }
 
@@ -378,8 +377,7 @@ function restoreImageAttrs() {
 		} // End of if
 	} // End of for
 	
-	// Clear cookie containing list of images where
-	// their attributes need to be updated
+	// Clear cookie containing list of images where their attributes need to be updated
 	$.cookie('images2update', '');
 }
 
@@ -464,7 +462,133 @@ function loadEditImagePage(tgtImage) {
 		// Create label and input for attribute
 		div = $('<div></div>').css('display', 'inline');
 		label = $('<label>' + key + ':</label>').css('vertical-align', 'middle');
-		input = $('<input type="text" value="' + value + '" title="' + defAttrs[key] + '"/>').css('margin-top', '5px');
+		input = $('<input type="text" id="' + key + '" value="' + value + '" title="' + defAttrs[key] + '"/>').css('margin-top', '5px');
+		
+		// Create server browser
+		switch (key) {
+    		case 'pkgdir':
+    			input.serverBrowser({
+    	    		onSelect : function(path) {
+        				$('#pkgdir').val(path);
+            		},
+            		onLoad : function() {
+            			return $('#pkgdir').val();
+            		},
+            		knownExt : [ 'exe', 'js', 'txt' ],
+            		knownPaths : [{
+            			text : 'Install',
+            			image : 'desktop.png',
+            			path : '/install'
+            		}],
+            		imageUrl : 'images/',
+            		systemImageUrl : 'images/',
+            		handlerUrl : 'lib/getpath.php',
+            		title : 'Browse',
+            		requestMethod : 'POST',
+            		width : '500',
+            		height : '300',
+            		basePath : '/install' // Limit user to only install directory
+            	});
+    			break;
+    		case 'otherpkgdir':
+    			input.serverBrowser({
+    	    		onSelect : function(path) {
+        				$('#otherpkgdir').val(path);
+            		},
+            		onLoad : function() {
+            			return $('#otherpkgdir').val();
+            		},
+            		knownExt : [ 'exe', 'js', 'txt' ],
+            		knownPaths : [{
+            			text : 'Install',
+            			image : 'desktop.png',
+            			path : '/install'
+            		}],
+            		imageUrl : 'images/',
+            		systemImageUrl : 'images/',
+            		handlerUrl : 'lib/getpath.php',
+            		title : 'Browse',
+            		requestMethod : 'POST',
+            		width : '500',
+            		height : '300',
+            		basePath : '/install' // Limit user to only install directory
+            	});
+    			break;
+    		case 'pkglist':
+    			input.serverBrowser({
+    	    		onSelect : function(path) {
+        				$('#pkglist').val(path);
+            		},
+            		onLoad : function() {
+            			return $('#pkglist').val();
+            		},
+            		knownExt : [ 'exe', 'js', 'txt' ],
+            		knownPaths : [{
+            			text : 'Install',
+            			image : 'desktop.png',
+            			path : '/install'
+            		}],
+            		imageUrl : 'images/',
+            		systemImageUrl : 'images/',
+            		handlerUrl : 'lib/getpath.php',
+            		title : 'Browse',
+            		requestMethod : 'POST',
+            		width : '500',
+            		height : '300',
+            		basePath : '/opt/xcat/share' // Limit user to only install directory
+            	});
+    			break;
+    		case 'otherpkglist':
+    			input.serverBrowser({
+    	    		onSelect : function(path) {
+        				$('#otherpkglist').val(path);
+            		},
+            		onLoad : function() {
+            			return $('#otherpkglist').val();
+            		},
+            		knownExt : [ 'exe', 'js', 'txt' ],
+            		knownPaths : [{
+            			text : 'Install',
+            			image : 'desktop.png',
+            			path : '/install'
+            		}],
+            		imageUrl : 'images/',
+            		systemImageUrl : 'images/',
+            		handlerUrl : 'lib/getpath.php',
+            		title : 'Browse',
+            		requestMethod : 'POST',
+            		width : '500',
+            		height : '300',
+            		basePath : '/install' // Limit user to only install directory
+            	});
+    			break;
+    		case 'template':
+    			input.serverBrowser({
+    	    		onSelect : function(path) {
+        				$('#template').val(path);
+            		},
+            		onLoad : function() {
+            			return $('#template').val();
+            		},
+            		knownExt : [ 'exe', 'js', 'txt' ],
+            		knownPaths : [{
+            			text : 'Install',
+            			image : 'desktop.png',
+            			path : '/install'
+            		}],
+            		imageUrl : 'images/',
+            		systemImageUrl : 'images/',
+            		handlerUrl : 'lib/getpath.php',
+            		title : 'Browse',
+            		requestMethod : 'POST',
+            		width : '500',
+            		height : '300',
+            		basePath : '/opt/xcat/share' // Limit user to only install directory
+            	});
+    			break;
+    		default:
+    			// Do nothing
+		}
 		
 		// Change border to blue onchange
 		input.bind('change', function(event) {
@@ -564,11 +688,11 @@ function loadEditImagePage(tgtImage) {
 }
 
 /**
- * Load copy CDs page
+ * Load copy CD page
  * 
  * @return Nothing
  */
-function loadCopyLinuxPage() {
+function loadCopyCdPage() {
 	// Get provision tab
 	var tab = getProvisionTab();
 

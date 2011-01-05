@@ -4,6 +4,8 @@ var globalAllNodesNum = 0;
 var globalFinishNodesNum = 0;
 var globalSelectedAttributes = '';
 var globalTimeStamp;
+var globalCondition = '';
+var globalResponse = new Object();
 
 function loadRmcMon(){
 	//find the rmcmon tab
@@ -624,6 +626,7 @@ function showConfigureDia(){
 	});
 }
 
+/*===========RMC Event Tab============*/
 /**
  * load the rmc event tab.
  * 
@@ -655,7 +658,69 @@ function loadRmcEvent(){
 	});
 }
 
-/*===========RMC Event Tab============*/
+/**
+ * get all conditions  
+ * 
+ * 
+ * @return
+ *        
+ */
+function getConditions(){
+	if ('' == globalCondition){
+		$.ajax({
+			url : 'lib/cmd.php',
+			dataType : 'json',
+			data : {
+				cmd : 'webrun',
+				tgt : '',
+				args : 'lscondition',
+				msg : ''
+			},
+			
+			success : function(data){
+				globalCondition = data.rsp[0];
+			}
+		});
+	}
+}
+
+/**
+ * get all response  
+ * 
+ * 
+ * @return
+ *        
+ */
+function getResponse(){
+	var tempFlag = false;
+	//get all response first
+	for (var i in globalResponse){
+		tempFlag = true; 
+		break;
+	}
+	if (!tempFlag){
+		$.ajax({
+			url : 'lib/cmd.php',
+			dataType : 'json',
+			data : {
+				cmd : 'webrun',
+				tgt : '',
+				args : 'lsresponse',
+				msg : ''
+			},
+			
+			success : function(data){
+				var resps = data.rsp[0].split(';');
+				for(var i in resps){
+					var name = resps[i];
+					name = name.substr(1, (name.length - 2));
+					globalResponse[name] = 1;
+				}
+			}
+		});
+	}
+}
+
 /**
  * show all the event in the rmc event tab 
  * 
@@ -676,6 +741,10 @@ function showEventLog(data){
 	
 	//add the configure button
 	loadRmcEventConfig();
+	
+	//get conditions and responses, save in the global
+	getConditions();
+	getResponse();
 	
 	var eventTable = new DataTable('lsEventTable');
 	eventTable.init(['Time', 'Type', 'Content']);
@@ -707,12 +776,29 @@ function showEventLog(data){
  *        
  */
 function loadRmcEventConfig(){
-	var mkConResBut = createButton('Make Association');
-	mkConResBut.bind('click', function(){
+	var chCondScopeBut = createButton('Change Condition Scope');
+	chCondScopeBut.bind('click', function(){
+		chCondScopeDia();
+	});
+	$('#rmcEventDiv').append(chCondScopeBut);
+	
+	var mkCondRespBut = createButton('Make/Remove Association');
+	mkCondRespBut.bind('click', function(){
 		mkCondRespDia();
 	});
+	$('#rmcEventDiv').append(mkCondRespBut);
 	
-	$('#rmcEventDiv').append(mkConResBut);
+	var startCondRespBut = createButton('Start Association');
+	startCondRespBut.bind('click', function(){
+		startCondRespDia();
+	});
+	$('#rmcEventDiv').append(startCondRespBut);
+	
+	var stopCondRespBut = createButton('Stop Association');
+	stopCondRespBut.bind('click', function(){
+		stopCondRespDia();
+	});
+	$('#rmcEventDiv').append(stopCondRespBut);
 }
 
 /**
@@ -724,7 +810,256 @@ function loadRmcEventConfig(){
  *        
  */
 function mkCondRespDia(){
-	var diaDiv = $('<div title="Make Association"><div>');
+	var diaDiv = $('<div title="Configure Association" id="mkAssociation"><div>');
+	
+	//2 fieldset conditions, response
+	diaDiv.append('<fieldset id="mkAssCond"><legend>Predefined Condition</legend></fieldset>');
+	diaDiv.append('<fieldset id="mkAssResp"><legend>Response</legend>Plase select condition first.</fieldset>');
+	diaDiv.append('<div id="selectedResp" style="display: none;" ><div>');
+	
+	//add the conditions into fieldset
+	if ('' == globalCondition){
+		diaDiv.find('#mkAssCond').append('Getting predefined conditions, open this dislogue later.');
+	}
+	else{
+		diaDiv.find('#mkAssCond').append(createConditionTable(globalCondition));
+	}
+	
+	//change the response field when click the condition
+	diaDiv.find('input:radio').bind('click', function(){
+		diaDiv.find('#mkAssResp').empty().append('<legend>Response</legend>Getting response').append(createLoader());
+		$.ajax({
+			url : 'lib/cmd.php',
+			dataType : 'json',
+			data : {
+				cmd : 'webrun',
+				tgt : '',
+				args : 'lscondresp;"' + $(this).attr('value') + '"',
+				msg : ''
+			},
+			
+			success : function(data){
+				var tempHash = new Object();
+				var oldSelectedResp = '';
+				var showStr = '';
+				if (data.rsp[0]){
+					var names = data.rsp[0].split(';');
+					for (var i in names){
+						var name = names[i];
+						name = name.substr(1, name.length - 2);
+						tempHash[name] = 1;
+					}
+				}
+				
+				for(var name in globalResponse){
+					if(tempHash[name]){
+						showStr += '<input type="checkbox" checked="checked" value="' + name + '">' + name;
+						oldSelectedResp += ';' + name;
+					}
+					else{
+						showStr += '<input type="checkbox" value="' + name + '">' + name;
+					}
+				}
+				
+				diaDiv.find('#mkAssResp').empty().append('<legend>Response</legend>').append(showStr);
+				diaDiv.find('#selectedResp').empty().append(oldSelectedResp);
+			}
+		});
+	});
+	
+	diaDiv.dialog({
+		 modal: true,
+         width: 570,
+         close: function(event, ui){
+					$(this).remove();
+				},
+		buttons: {
+			cancel : function(){
+				$(this).dialog('close');
+			},
+			ok : function(){
+				var newResp = new Object();
+				var oldResp = new Object();
+				var oldString = '';
+				var newString = '';
+				//get the old seelected responses
+				var conditionName = $(this).find('#mkAssCond :checked').attr('value');
+				if (!conditionName){
+					return;
+				}
+				var temp = $(this).find('#selectedResp').html();
+				if('' == temp){
+					return;
+				}
+				var tempArray = temp.substr(1).split(';');
+				for (var i in tempArray){
+					oldResp[tempArray[i]] = 1;
+				}
+				//get the new selected responses
+				$(this).find('#mkAssResp input:checked').each(function(){
+					var respName = $(this).attr('value');
+					newResp[respName] = 1;
+				});
+				
+				for (var i in newResp){
+					if(oldResp[i]){
+						delete oldResp[i];
+						delete newResp[i];
+					}
+				}
+				
+				//add the response which are delete.
+				for (var i in oldResp){
+					oldString += ',"' + i + '"';
+				}
+				if('' != oldString){
+					oldString = oldString.substr(1);
+				}
+				
+				//add the response which are new add
+				for (var i in newResp){
+					newString += ',"' + i +'"';
+				}
+				if ('' != newString){
+					newString = newString.substr(1);
+				}
+				
+				if(('' != oldString) || ('' != newString)){
+					$('#rmcEventStatus').empty().append('Create/Remove associations').append(createLoader());
+					$.ajax({
+						url : 'lib/cmd.php',
+						dataType : 'json',
+						data : {
+							cmd : 'webrun',
+							tgt : '',
+							args : 'mkcondresp;"' + conditionName + '";+' + newString + ':-' + oldString,
+							msg : ''
+						},
+						
+						success : function(data){
+							$('#rmcEventStatus').empty().append(data.rsp[0]);;
+						}
+					});
+				}
+				$(this).dialog('close');
+			}
+		}
+	});
+}
+
+/**
+ * show the remove association dialogue
+ * 
+ * @param 
+
+ * @return
+ *        
+ */
+function rmCondRespDia(){
+	
+}
+
+/**
+ * show the make condition dialogue
+ * 
+ * @param 
+
+ * @return
+ *        
+ */
+function chCondScopeDia(){
+	var diaDiv = $('<div title="Change Condition Scope" id="chScopeDiaDiv"><div>');
+	//3 fieldset to show conditions, group and status
+	diaDiv.append('<fieldset id="changePreCond"><legend>Predefined Condition</legend></fieldset>');
+	diaDiv.append('<fieldset id="changeGroup"><legend>Group</legend></fieldset>');
+	diaDiv.append('<fieldset id="changeStatus"></fieldset>');
+	
+	//add the groups into fieldset
+	var groups = $.cookie('groups').split(',');
+	for (var i in groups){
+		var tempStr = '<input type="checkbox" value="' + groups[i] + '">' + groups[i];
+		diaDiv.find('#changeGroup').append(tempStr);
+	}
+	
+	//add the conditions into fieldset
+	if ('' == globalCondition){
+		diaDiv.find('#changePreCond').append('Getting predefined conditions, open this dislogue later.');
+	}
+	else{
+		diaDiv.find('#changePreCond').append(createConditionTable(globalCondition));
+	}
+	
+	//create the dislogue
+	diaDiv.dialog({
+		 modal: true,
+        width: 570,
+        close: function(event, ui){
+					$(this).remove();
+				},
+		buttons: {
+			cancel : function(){
+				$(this).dialog('close');
+			},
+			ok : function(){
+				$('#changeStatus').empty().append('<legend>Status</legend>');
+				var conditionName = $('#changePreCond :checked').attr('value');
+				var groupName = '';
+				$('#changeGroup :checked').each(function(){
+					if ('' == groupName){
+						groupName += $(this).attr('value');
+					}
+					else{
+						groupName += ',' + $(this).attr('value');
+					}
+				});
+				
+				if (undefined == conditionName){
+					$('#changeStatus').append('Please select conditon.');
+					return;
+				}
+				
+				if ('' == groupName){
+					$('#changeStatus').append('Please select group.');
+					return;
+				}
+				
+				$('#changeStatus').append(createLoader());
+				$.ajax({
+					url : 'lib/cmd.php',
+					dataType : 'json',
+					data : {
+						cmd : 'webrun',
+						tgt : '',
+						args : 'mkcondition;change;' + conditionName + ';' + groupName,
+						msg : ''
+					},
+					
+					success : function(data){
+						$('#changeStatus img').remove();
+						if (-1 != data.rsp[0].indexOf('Error')){
+							$('#changeStatus').append(data.rsp[0]);
+						}
+						else{
+							$('#rmcEventStatus').empty().append(data.rsp[0]);
+							$('#chScopeDiaDiv').remove();
+						}
+					}
+				});
+			}
+		}
+	});
+}
+
+/**
+ * show the make response dialogue
+ * 
+ * @param 
+
+ * @return
+ *        
+ */
+function mkResponseDia(){
+	var diaDiv = $('<div title="Make Response"><div>');
 	diaDiv.append('under construction.');
 	
 	diaDiv.dialog({
@@ -744,14 +1079,171 @@ function mkCondRespDia(){
 	});
 }
 
+
+
 /**
- * show the remove association dialogue
+ * start the condition and response associations
  * 
  * @param 
 
  * @return
  *        
  */
-function rmCondRespDia(){
+function startCondRespDia(){
+	var diaDiv = $('<div title="Start Association" id="startAss"><div>');
+	diaDiv.append('Getting conditions').append(createLoader());
 	
+	$.ajax({
+		url : 'lib/cmd.php',
+		dataType : 'json',
+		data : {
+			cmd : 'webrun',
+			tgt : '',
+			args : 'lscondition;-n',
+			msg : ''
+		},
+		
+		success : function(data){
+			if (data.rsp[0]){
+				$('#startAss').empty().append(createConditionTable(data.rsp[0]));
+				$('#startAss').dialog("option", "position", 'center');
+			}
+			else{
+				$('#startAss').empty().append('There is not non-monitored condition.');
+			}
+		}
+	});
+	
+	diaDiv.dialog({
+		 modal: true,
+         width: 570,
+         close: function(event, ui){
+					$(this).remove();
+				},
+		buttons: {
+			cancel : function(){
+				$(this).dialog('close');
+			},
+			start : function(){
+				var conditionName = $('#startAss :checked').attr('value');
+				if (!conditionName){
+					alert('Select condition name please.');
+					return;
+				}
+				$('#rmcEventStatus').empty().append('Starting monitor on ' + conditionName).append(createLoader());
+				$.ajax({
+					url : 'lib/cmd.php',
+					dataType : 'json',
+					data : {
+						cmd : 'webrun',
+						tgt : '',
+						args : 'startcondresp;' + conditionName,
+						msg : ''
+					},
+					
+					success : function(data){
+						$('#rmcEventStatus').empty().append(data.rsp[0]);
+					}
+				});
+				$(this).dialog('close');
+			}
+		}
+	});
+}
+
+/**
+ * stop the condition and response associations
+ * 
+ * @param 
+
+ * @return
+ *        
+ */
+function stopCondRespDia(){
+	var diaDiv = $('<div title="Stop Association" id="stopAss"><div>');
+	diaDiv.append('Getting conditions').append(createLoader());
+	
+	$.ajax({
+		url : 'lib/cmd.php',
+		dataType : 'json',
+		data : {
+			cmd : 'webrun',
+			tgt : '',
+			args : 'lscondition;-m',
+			msg : ''
+		},
+		
+		success : function(data){
+			if (data.rsp[0]){
+				$('#stopAss').empty().append(createConditionTable(data.rsp[0]));
+				$('#stopAss').dialog("option", "position", 'center');
+			}
+			else{
+				$('#stopAss').empty().append('There is not monitored condition.');
+			}
+		}
+	});
+	
+	diaDiv.dialog({
+		 modal: true,
+         width: 570,
+         close: function(event, ui){
+					$(this).remove();
+				},
+		buttons: {
+			cancel : function(){
+				$(this).dialog('close');
+			},
+			stop : function(){
+				var conditionName = $('#stopAss :checked').attr('value');
+				if (!conditionName){
+					alert('Select condition name please.');
+					return;
+				}
+				$('#rmcEventStatus').empty().append('Stoping monitor on ' + conditionName).append(createLoader());
+				$.ajax({
+					url : 'lib/cmd.php',
+					dataType : 'json',
+					data : {
+						cmd : 'webrun',
+						tgt : '',
+						args : 'stopcondresp;' + conditionName,
+						msg : ''
+					},
+					
+					success : function(data){
+						$('#rmcEventStatus').empty().append(data.rsp[0]);
+					}
+				});
+				$(this).dialog('close');
+			}
+		}
+	});
+}
+
+/**
+ * create the condition table for dialogue
+ * 
+ * @param 
+
+ * @return
+ *        
+ */
+function createConditionTable(cond){
+	var conditions = cond.split(';');
+	var name = '';
+	var showStr = '<table style="font:12px verdana,arial,helvetica,sans-serif;"><tbody>';
+	for (var i in conditions){
+		name = conditions[i];
+		name = name.substr(1, name.length - 2);
+		if (0 == i % 2){
+			showStr += '<tr><td><input type="radio" name="preCond" value="'+ name + '">' + name + '</td><td width=10></td>' ;
+		}
+		else{
+			showStr += '<td><input type="radio" name="preCond" value="'+ name + '">' + name + '</td></tr>';
+		}
+	}
+	showStr += '</tbody></table>';
+	
+	return showStr;
 }
