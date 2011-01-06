@@ -518,6 +518,8 @@ ResolveLinks
 # make sure mtab points to the right place:
 /bin/ln -sf /proc/mounts ${TMPFS}/etc/mtab
 
+/bin/cat /etc/resolv.conf > $MNTDIR/etc/resolv.conf
+
 # catch all hack for debugging:
 #cp -r -a ${DEFAULT}/* /.snapshot/tmpfs/
 # foo
