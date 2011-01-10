@@ -6,7 +6,7 @@ var origAttrs = new Object();	// Original node attributes
 var defAttrs; 		// Definable node attributes
 
 /**
- * Set the nodes tab
+ * Set the nodes tab 
  * 
  * @param obj
  *            Tab object
@@ -1106,7 +1106,8 @@ function loadUnlockPage(tgtNodes) {
     		// Show status bar
     		statusBar.show();
     
-    		// Disable Ok button
+    		// Disable all inputs and Ok button
+			$('#' + newTabId + ' input').attr('disabled', 'disabled');
     		$(this).attr('disabled', 'true');
     	} else {
     		// Show warning message
@@ -2407,7 +2408,7 @@ function openSetPropsDialog() {
 	setPropsForm.dialog({
 		modal: true,
 		height: 400,
-		width: 650,
+		width: 700,
 		buttons: {
         	"Save": function() {
         		// Remove any warning messages
