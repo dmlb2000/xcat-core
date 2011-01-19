@@ -86,19 +86,6 @@ function loadNodesPage() {
 			success : loadGroups
 		});
 		
-		// Get graphical view info
-		$.ajax( {
-			url : 'lib/cmd.php',
-			dataType : 'json',
-			data : {
-				cmd : 'nodels',
-				tgt : 'all',
-				args : 'nodetype.nodetype;ppc.parent;vpd.mtm;nodelist.status;nodehm.mgt',
-				msg : ''
-			},
-
-			success : extractGraphicalData
-		});
 	}
 }
 
@@ -158,13 +145,19 @@ function loadGroups(data) {
 			var loader2 = $('<center></center>').append(createLoader());
 			
 			// Create a tab for this group
-			var tab = new Tab();
+			var tab = new Tab('nodesPageTabs');
 			setNodesTab(tab);
 			tab.init();
 			$('#nodes').append(tab.object());
 			tab.add('nodesTab', 'Nodes', loader, false);
 			tab.add('graphTab', 'Graphical', loader2, false);
-
+			
+			$('#nodesPageTabs').bind('tabsselect', function(event, ui){
+				//for the graphical tab, we should check the graphical data first
+				if (1 == ui.index){
+					createPhysicalLayout(nodesList);
+				}
+			});
 			// To improve performance, get all nodes within selected group
 			// Get node definitions only for first 50 nodes
 			$.ajax( {
@@ -195,7 +188,7 @@ function loadGroups(data) {
 							nodesList.push(rsp[i][0]);
 						}
 					}
-										
+					
 					// Sort nodes list
 					nodesList.sort();
 					
@@ -225,6 +218,7 @@ function loadGroups(data) {
 
 						success : loadNodes
 					});
+					
 				}
 			});
 						
@@ -245,19 +239,6 @@ function loadGroups(data) {
     			});
 			}
 			
-			// Get physical layout
-			$.ajax({
-				url : 'lib/cmd.php',
-				dataType : 'json',
-				data : {
-					cmd : 'lsdef',
-					tgt : '',
-					args : thisGroup + ';-s',
-					msg : ''
-				},
-				
-				success : createPhysicalLayout
-			});
 		} // End of if (thisGroup)
 	});
 	

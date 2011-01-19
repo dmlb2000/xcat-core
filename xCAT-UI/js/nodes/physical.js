@@ -1,8 +1,52 @@
 var bpaList;
 var fspList;
 var lparList;
-var nodeList;
+var graphicalNodeList;
 var selectNode;
+var graphicalDataType = ['nodetype.nodetype', 'ppc.parent', 'nodelist.status', 'vpd.mtm'];
+
+function initGraphicalData(dataTypeIndex){
+	if (undefined == dataTypeIndex){
+		dataTypeIndex = 0;
+	}
+
+	if ((dataTypeIndex < 0) || (dataTypeIndex > 3)){
+		return;
+	}
+	
+	var typeName = graphicalDataType[dataTypeIndex];
+	$('#graphTab').empty().append('Getting ' + typeName).append(createLoader());
+	$.ajax( {
+		url : 'lib/cmd.php',
+		dataType : 'json',
+		data : {
+			cmd : 'nodels',
+			tgt : 'all',
+			args : typeName,
+			msg : 'index' + dataTypeIndex.toString()
+		},
+
+		success : function(data){
+			var tempIndex = Number(data.msg.substr(5, 1));
+			extractGraphicalData(data);
+			if (tempIndex < graphicalDataType.length - 1){
+				tempIndex ++;
+				initGraphicalData(tempIndex);
+			}
+			else{
+				$('#graphTab').empty();
+				for (var temp in nodesList){
+					var nodeName = nodesList[temp];
+					if ('' == nodeName){
+						continue;
+					}
+					fillList(nodeName);
+				}
+				createGraphical(bpaList, fspList, $('#graphTab'));
+			}
+		}
+	});
+}
 
 /**
  * extract all nodes userful data into a hash, which is used for creating graphical
@@ -13,34 +57,29 @@ var selectNode;
  */
 function extractGraphicalData(data){
 	var nodes = data.rsp;
-	nodeList = new Object();
 	
 	//extract useful info into tempList
 	for (var i = 0; i < nodes.length; i++){
 		var nodeName = nodes[i][0];
-		if (undefined == nodeList[nodeName]){
-			nodeList[nodeName] = new Object();
+		if (undefined == graphicalNodeList[nodeName]){
+			graphicalNodeList[nodeName] = new Object();
 		}
 		
-		switch(nodes[i][2]){
-			case 'nodetype.nodetype': {
-				nodeList[nodeName]['type'] = nodes[i][1];
+		switch(data.msg.substr(5, 1)){
+			case '0': {
+				graphicalNodeList[nodeName]['type'] = nodes[i][1];
 			}
 			break;
-			case 'ppc.parent' : {
-				nodeList[nodeName]['parent'] = nodes[i][1];
+			case '1' : {
+				graphicalNodeList[nodeName]['parent'] = nodes[i][1];
 			}
 			break;
-			case 'nodelist.status': {
-				nodeList[nodeName]['status'] = nodes[i][1];
+			case '2': {
+				graphicalNodeList[nodeName]['status'] = nodes[i][1];
 			}
 			break;
-			case 'vpd.mtm': {
-				nodeList[nodeName]['mtm'] = nodes[i][1];
-			}
-			break;
-			case 'nodehm.mgt': {
-				nodeList[nodeName]['mgt'] = nodes[i][1];
+			case '3': {
+				graphicalNodeList[nodeName]['mtm'] = nodes[i][1];
 			}
 			break;
 			default :
@@ -49,37 +88,63 @@ function extractGraphicalData(data){
 	}	
 }
 
-function createPhysicalLayout(data){
+function createPhysicalLayout(nodeList){
 	bpaList = new Object();
 	fspList = new Object();
 	lparList = new Object();
 	selectNode = new Object();
+	var flag = false;
 	
-	$('#graphTab').empty();
-	for (var temp in data.rsp){
-		var nodeName = data.rsp[temp];
-		nodeName = nodeName.substring(0, nodeName.indexOf(' '));
-		if ('' == nodeName){
-			continue;
-		}
-		fillList(nodeName);
+	//no nodes are selected.
+	if (!nodeList){
+		return;
 	}
-	createGraphical(bpaList, fspList, $('#graphTab'));
+	
+	//save the new selected nodes.
+	if(graphicalNodeList){
+		for(var i in graphicalNodeList){
+			flag = true;
+			break;
+		}
+	}
+	
+	//there is not graphical data, get the info now
+	if (!flag){
+		graphicalNodeList = new Object();
+		initGraphicalData(0);
+	}
+	else{
+		$('#graphTab').empty();
+		for (var temp in nodeList){
+			var nodeName = nodeList[temp];
+			if ('' == nodeName){
+				continue;
+			}
+			fillList(nodeName);
+		}
+		createGraphical(bpaList, fspList, $('#graphTab'));
+	}
 }
 
 function fillList(nodeName){
-	var parentName = nodeList[nodeName]['parent'];
-	var mtm = nodeList[nodeName]['mtm'];
-	var status = nodeList[nodeName]['status']; 
+	var parentName = graphicalNodeList[nodeName]['parent'];
+	var mtm = graphicalNodeList[nodeName]['mtm'];
+	var status = graphicalNodeList[nodeName]['status']; 
 	
-	switch(nodeList[nodeName]['type']){
+	if ('' == status){
+		status = 'unknown';
+	}
+	
+	switch(graphicalNodeList[nodeName]['type']){
 		case 'bpa': {
 			if (undefined == bpaList[nodeName]){
 				bpaList[nodeName] = new Array();
 			}
 		}
 		break;
-		case 'lpar,osi': {
+		case 'lpar,osi': 
+		case 'lpar':
+		case 'osi': {
 			if ('' == parentName){
 				break;
 			}
@@ -229,7 +294,7 @@ function createGraphical(bpa, fsp, area){
 	$('.fspDiv2, .fspDiv4, .fspDiv42').tooltip({
 		position: "center right",
 		relative : true,
-		offset : [10, 10],
+		offset : [10, -40],
 		effect: "fade"
 	});
 	
@@ -357,8 +422,9 @@ function createActionMenu(){
 	//Clone
 	var cloneLnk = $('<a>Clone</a>');
 	cloneLnk.bind('click', function(event) {
+		/*
 		for (var name in selectNode) {
-			var mgt = nodeList[name]['mgt'];
+			var mgt = graphicalNodeList[name]['mgt'];
 			
 			// Create an instance of the plugin
 			var plugin;
@@ -385,6 +451,7 @@ function createActionMenu(){
 			
 			plugin.loadClonePage(name);
 		}
+		*/
 	});
 
 	//Delete
@@ -494,6 +561,7 @@ function createActionMenu(){
 function createFspDiv(fspName, mtm, fsp){
 	//create fsp title
 	var lparStatusRow = '';
+	var temp = '';
 	
 	for (var lparIndex in fsp[fspName]['children']){
 		//show 8 lpars on one cec at most.
@@ -507,8 +575,14 @@ function createFspDiv(fspName, mtm, fsp){
 	
 	//select the backgroud
 	var divClass = '';
-	if (hardwareInfo[mtm][1]){
-		divClass += 'fspDiv' + hardwareInfo[mtm][1];
+	if ('' == mtm){
+		temp = '8231-E2B';
+	}
+	else{
+		temp = mtm;
+	}
+	if (hardwareInfo[temp][1]){
+		divClass += 'fspDiv' + hardwareInfo[temp][1];
 	}
 	else{
 		divClass += 'fspDiv4';
@@ -533,8 +607,15 @@ function createFspDiv(fspName, mtm, fsp){
 function createFspTip(fspName, mtm, fsp){
 	var tip = $('<div class="tooltip"></div>');
 	var tempTable = $('<table><tbody></tbody></table>');
-	if (hardwareInfo[mtm]){
-		tip.append('<h3>' + fspName + '(' + hardwareInfo[mtm][0] + ')</h3><br/>');
+	var temp = '';
+	if ('' == mtm){
+		temp = 'unkown';
+	}
+	else{
+		temp = mtm;
+	}
+	if (hardwareInfo[temp]){
+		tip.append('<h3>' + fspName + '(' + hardwareInfo[temp][0] + ')</h3><br/>');
 	}
 	else{
 		tip.append('<h3>' + fspName + '</h3><br/>');
