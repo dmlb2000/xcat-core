@@ -721,12 +721,14 @@ sub process_request
 	my $nettab = xCAT::Table->new("networks");
 	my @vnets = $nettab->getAllAttribs('net','mgtifname','mask','dynamicrange');
     foreach (@vnets) {
-        my $trange = $_->{dynamicrange}; #temp range, the dollar sign makes it look strange
-        $trange =~ s/[,-]/ /g;
-        my $begin;
-        my $end;
-       ($begin,$end) = split / /,$trange;
-       $dynamicranges{$trange}=[unpack("N*",inet_aton($begin)),unpack("N*",inet_aton($end))];
+        my $tranges = $_->{dynamicrange}; #temp range, the dollar sign makes it look strange
+        foreach my $trange (split /;/,$tranges) {
+            $trange =~ s/[,-]/ /g;
+            my $begin;
+            my $end;
+           ($begin,$end) = split / /,$trange;
+           $dynamicranges{$trange}=[unpack("N*",inet_aton($begin)),unpack("N*",inet_aton($end))];
+        }
     }
     if ($^O eq 'aix')
     {
@@ -1289,7 +1291,11 @@ sub addnet
           "    } else if substring(filename,0,1) = null { #otherwise, provide yaboot if the client isn't specific\n ";
         push @netent, "      filename \"/yaboot\";\n";
         push @netent, "    }\n";
-        if ($range) { push @netent, "    range dynamic-bootp $range;\n" }
+        if ($range) { 
+            foreach my $singlerange (split /;/,$range) {
+                push @netent, "    range dynamic-bootp $singlerange;\n" 
+            }
+        }
         push @netent, "  } # $net\/$mask subnet_end\n";
         splice(@dhcpconf, $idx, 0, @netent);
     }
