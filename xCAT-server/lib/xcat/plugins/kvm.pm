@@ -772,11 +772,6 @@ sub migrate {
         return (1,"Unable to reach $targ to perform operation of $node, destination unusable.");
     }
     if (defined $confdata->{vm}->{$node}->[0]->{storage} and $confdata->{vm}->{$node}->[0]->{storage} =~ /^nfs:/) {
-        my $urls =  $confdata->{vm}->{$node}->[0]->{storage} and $confdata->{vm}->{$node}->[0]->{storage};
-        foreach (split /,/,$urls) {
-            s/=.*//;
-            get_storage_pool_by_url($_,$desthypconn,$targ);
-        }
         if ($confdata->{vm}->{$node}->[0]->{master}) {
             my $vmmastertab=xCAT::Table->new('vmmaster',-create=>0);
             my $masterent;
@@ -789,6 +784,11 @@ sub migrate {
                      get_storage_pool_by_url($_,$desthypconn,$targ);
                  }
             }
+        }
+        my $urls =  $confdata->{vm}->{$node}->[0]->{storage} and $confdata->{vm}->{$node}->[0]->{storage};
+        foreach (split /,/,$urls) {
+            s/=.*//;
+            get_storage_pool_by_url($_,$desthypconn,$targ);
         }
     }
     my $sock = IO::Socket::INET->new(Proto=>'udp');
@@ -879,11 +879,6 @@ sub makedom {
     if (not $xml and $confdata->{kvmnodedata}->{$node} and $confdata->{kvmnodedata}->{$node}->[0] and $confdata->{kvmnodedata}->{$node}->[0]->{xml}) {
         #we do this to trigger storage prereq fixup
         if (defined $confdata->{vm}->{$node}->[0]->{storage} and $confdata->{vm}->{$node}->[0]->{storage} =~ /^nfs:/) {
-            my $urls =  $confdata->{vm}->{$node}->[0]->{storage} and $confdata->{vm}->{$node}->[0]->{storage};
-            foreach (split /,/,$urls) {
-                s/=.*//;
-                get_storage_pool_by_url($_);
-            }
             if ($confdata->{vm}->{$node}->[0]->{master}) {
                 my $vmmastertab=xCAT::Table->new('vmmaster',-create=>0);
                 my $masterent;
@@ -896,6 +891,11 @@ sub makedom {
                          get_storage_pool_by_url($_);
                      }
                 }
+            }
+            my $urls =  $confdata->{vm}->{$node}->[0]->{storage} and $confdata->{vm}->{$node}->[0]->{storage};
+            foreach (split /,/,$urls) {
+                s/=.*//;
+                get_storage_pool_by_url($_);
             }
         }
         $xml = $confdata->{kvmnodedata}->{$node}->[0]->{xml};
