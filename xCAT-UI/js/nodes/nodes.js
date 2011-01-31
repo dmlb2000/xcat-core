@@ -142,7 +142,6 @@ function loadGroups(data) {
 			
 			// Create loader
 			var loader = $('<center></center>').append(createLoader());
-			var loader2 = $('<center></center>').append(createLoader());
 			
 			// Create a tab for this group
 			var tab = new Tab('nodesPageTabs');
@@ -150,7 +149,7 @@ function loadGroups(data) {
 			tab.init();
 			$('#nodes').append(tab.object());
 			tab.add('nodesTab', 'Nodes', loader, false);
-			tab.add('graphTab', 'Graphical', loader2, false);
+			tab.add('graphTab', 'Graphical', '', false);
 			
 			$('#nodesPageTabs').bind('tabsselect', function(event, ui){
 				//for the graphical tab, we should check the graphical data first
@@ -2052,8 +2051,8 @@ function setOSImageCookies(data) {
 		var cols = rsp[i].split(',');
 		var osImage = cols[0].replace(new RegExp('"', 'g'), '');
 		var profile = cols[1].replace(new RegExp('"', 'g'), '');
-		var osVer = cols[5].replace(new RegExp('"', 'g'), '');
-		var osArch = cols[7].replace(new RegExp('"', 'g'), '');
+		var osVer = cols[6].replace(new RegExp('"', 'g'), '');
+		var osArch = cols[8].replace(new RegExp('"', 'g'), '');
 		
 		imageNames.push(osImage);
 		profilesHash[profile] = 1;
@@ -2072,14 +2071,14 @@ function setOSImageCookies(data) {
 	$.cookie('profiles', tmp);
 
 	// Save OS versions in a cookie
-	tmp = [];
+	tmp = new Array;
 	for (var key in osVersHash) {
 		tmp.push(key);
 	}
 	$.cookie('osvers', tmp);
 
 	// Save OS architectures in a cookie
-	tmp = [];
+	tmp = new Array;
 	for (var key in osArchsHash) {
 		tmp.push(key);
 	}
