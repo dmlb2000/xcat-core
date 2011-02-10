@@ -35,11 +35,9 @@ use strict;
 # Main
 
 $::progname = "runsqlcmd";
-my $args = join ' ', @ARGV;
-$::command = "$0 $args";
 Getopt::Long::Configure("bundling");
 $Getopt::Long::ignorecase = 0;
-my ($directory, $help, $version, $filelist);
+my ($directory, $help, $version,$verbose, $filelist);
 
 # parse the options
 if (
@@ -48,12 +46,16 @@ if (
                 'f|files=s' => \$filelist,
                 'h|help'    => \$help,
                 'v|version' => \$version,
+                'V|verbose' => \$verbose,
     )
   )
 {
     &usage;
     exit(1);
 }
+# see if they entered a command
+my $args = join ' ', @ARGV;
+my $command =  $args;
 
 # display the usage if -h or --help is specified
 if ($help)
@@ -73,10 +75,31 @@ if (($filelist) && ($directory))
     xCAT::MsgUtils->message("E","Cannot enter both the -f and -d flags.");
     exit 1;
 }
-if (!($filelist)) { # if no file list and no directory set default
-   if (!($directory)) {
-      $directory = "$::XCATROOT/lib/perl/xCAT_schema";  
-   }
+if (($command) && (($directory) || ($filelist)))
+{
+    xCAT::MsgUtils->message("E","Cannot enter both a command and the -d or -f flag.");
+    exit 1;
+}
+my $tempfile;
+if ($command) { # command on command line
+     $tempfile="/tmp/runcmdfile.$$"; 
+     my $cmd = "echo \"$command\"  > $tempfile";
+     xCAT::Utils->runcmd($cmd,0);
+     if ($::RUNCMD_RC != 0)
+     {    # error
+            xCAT::MsgUtils->message("E", "$cmd failed");
+            exit 1;
+
+     }
+     # put on filelist
+     $filelist=$tempfile;
+} else {  # commands in a file
+
+  if (!($filelist)) { # if no file list and no directory set default
+     if (!($directory)) {
+        $directory = "$::XCATROOT/lib/perl/xCAT_schema";  
+     }
+  }
 }
 
 my @filearray;
@@ -97,10 +120,11 @@ else
 }
 my @sqlfilelist = xCAT::Table->get_filelist($directory, \@filearray, "sql");
 
-# determine database
-my $xcatcfg = xCAT::Table->get_xcatcfg();
-foreach my $file (@sqlfilelist)
-{
+if (@sqlfilelist) {  # if anything to do
+  #determine database
+  my $xcatcfg = xCAT::Table->get_xcatcfg();
+  foreach my $file (@sqlfilelist)
+  {
     if ($xcatcfg =~ /^DB2:/)
     {
         &rundb2cmd($file);
@@ -116,13 +140,29 @@ foreach my $file (@sqlfilelist)
     if ($xcatcfg =~ /^SQLite:/)
     {
         # not supported but will leave routine in case we change our mind 
-        xCAT::MsgUtils->message("SE", "The runsqlcmd does not support the SQLite database.");
+        if ($verbose) {
+           xCAT::MsgUtils->message("SE", "The runsqlcmd does not support the SQLite database.");
+        }
         #&runsqlitecmd($file,$xcatcfg);
         exit 1;
     }
 
+  }
+} else {
+     if ($verbose) {
+        xCAT::MsgUtils->message("SI", "The runsqlcmd has no files to process in $directory .");
+     }
 }
+if ($tempfile) {
+     my $cmd = "rm $tempfile";
+     xCAT::Utils->runcmd($cmd,0);
+     if ($::RUNCMD_RC != 0)
+     {    # error
+            xCAT::MsgUtils->message("E", "$cmd failed");
+            exit 1;
 
+     }
+}   
 exit 0;
 
 #####################################
@@ -143,10 +183,10 @@ sub usage
 {
     xCAT::MsgUtils->message(
         'I',
-        "Usage:\nRuns the sql commands in files located in /opt/xcat/lib/perl/xCAT_schema by default or the directory input with -d or the list of files input with the -f flag. Supports DB2,PostgreSQL,MySQL."
+        "Usage:\nRuns the sql commands in files located in /opt/xcat/lib/perl/xCAT_schema by default, or the directory input with -d, or the list of files input with the -f flag, or the command input on the command line. Supports DB2,PostgreSQL,MySQL."
         );
     my $msg =
-      "runsqlcmd  <-h|--help>\n           <-v|--version>\n           <-d|--dir>\n           <-f|--files>\n";
+      "runsqlcmd  <-h|--help>\n           <-v|--version>\n           <-V|--verbose>\n           <-d|--dir>\n           <-f|--files>  \n           <sql command>";
 
     xCAT::MsgUtils->message('I', "$msg");
 }
@@ -167,6 +207,11 @@ sub rundb2cmd
     use File::Basename;
     my $file     = shift;
     my $rc       = 0;
+    if (!(-e $file)) {  # file does not exist
+        xCAT::MsgUtils->message("SE",
+            "The file:$file does not exist. ");
+        return;
+    }
     my $filename = basename($file);                # strip filename
     my $tmpfile  = "/tmp/" . $filename . ".tmp";
 
@@ -231,11 +276,23 @@ sub runmysqlcmd
     my ($prefix, $dbname) = split('=',  $front);
     my ($host, $admin, $passwd) = split('\|', $back);
     my ($hostind, $hostname) = split('=', $host);
-
+ 
     my $rc  = 0;
+    if (!(-e $file)) {  # file does not exist
+        xCAT::MsgUtils->message("SE",
+            "The file:$file does not exist. ");
+        return;
+    }
+    # set correct path to the mysql cmd
+    my $mysql;
+    if (xCAT::Utils->isAIX()) {
+      $mysql="/usr/local/mysql/bin/mysql";
+    } else {
+      $mysql="/usr/bin/mysql";
+    }
     my $cmd =
-      "mysql --user=$admin --password=$passwd --host=$hostname $dbname \< $file   ";
-    xCAT::MsgUtils->message("SI", "Running mysql --user=$admin --host=$hostname $dbname $file ");
+      "$mysql --user=$admin --password=$passwd --host=$hostname $dbname \< $file   ";
+    #xCAT::MsgUtils->message("SI", "Running mysql --user=$admin --host=$hostname $dbname $file ");
     system("$cmd");
 
     if ($? > 0)    # error
@@ -268,9 +325,21 @@ sub runpgsqlcmd
     my ($hostind, $hostname) = split('=', $host);
 
     my $rc  = 0;
+    if (!(-e $file)) {  # file does not exist
+        xCAT::MsgUtils->message("SE",
+            "The file:$file does not exist. ");
+        return;
+    }
+    # set correct path to the psql cmd
+    my $psql;
+    if (xCAT::Utils->isAIX()) {
+      $psql="/var/lib/pgsql/bin/psql";
+    } else {
+      $psql="/usr/bin/psql";
+    }
     my $cmd =
-      "PGPASSWORD=$passwd psql -d $dbname -h $hostname -U $admin -f $file   ";
-    xCAT::MsgUtils->message("SI", "Running psql -d $dbname -h $hostname -U $admin -f $file ");
+      "PGPASSWORD=$passwd $psql -d $dbname -h $hostname -U $admin -f $file   ";
+    #xCAT::MsgUtils->message("SI", "Running psql -d $dbname -h $hostname -U $admin -f $file ");
     system("$cmd");
 
     if ($? > 0)    # error
