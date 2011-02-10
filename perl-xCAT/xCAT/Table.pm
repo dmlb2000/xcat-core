@@ -3665,7 +3665,8 @@ sub get_filelist
     {
           my $filename= basename($file);  # strip filename
           my($name,$ext1) = split '\.', $filename;
-          my($tmpname,$ext2) = split '\_', $name;
+          my @parts = split '\_', $name;
+          my $ext2 = $parts[-1];  # get last element
           if ($ext2 eq $dbname)
           {
             push @filelist, $file;
