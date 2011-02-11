@@ -31,6 +31,7 @@ my $restartdhcp;
 my $sitenameservers;
 my $sitentpservers;
 my $sitelogservers;
+my $useddns;
 my $nrhash;
 my $machash;
 my $iscsients;
@@ -618,6 +619,10 @@ sub process_request
     if ($sitetab)
     {
         my $href;
+        ($href) = $sitetab->getAttribs({key => 'dnshandler'}, 'value');
+        if ($href and $href->{value} and $href->{value} =~ /ddns/) {
+            $useddns=1;
+        }
         ($href) = $sitetab->getAttribs({key => 'dhcpinterfaces'}, 'value');
         unless ($href and $href->{value})
         {    #LEGACY: singular keyname for old style site value
@@ -1261,6 +1266,7 @@ sub addnet
         }
         my $ddnserver = $nameservers;
         $ddnserver =~ s/,.*//;
+        if ($useddns) {
         push @netent, "zone $domain. {\n";
         push @netent, "   primary $ddnserver; key xcat_key; \n";
         push @netent, " }\n";
@@ -1268,6 +1274,7 @@ sub addnet
             push @netent, "zone $_ {\n";
             push @netent, "   primary $ddnserver; key xcat_key; \n";
             push @netent, " }\n";
+        }
         }
 
         my $tmpmaskn = unpack("N", inet_aton($mask));
