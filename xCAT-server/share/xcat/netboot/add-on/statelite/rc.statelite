@@ -252,6 +252,17 @@ ProcessType () {
             fi
 			# the link has already be in place on the image, so nothing else to do!
 			;;
+	tmpfs,rw) # for compatible reason
+	    if [ -d ${TMPFS}${2} ]; then
+			    /bin/cp -r -a ${1}* ${TMPFS}${2}
+			    echo "cp -r -a ${1}* ${TMPFS}${2}" >>$LOG
+            else
+                /bin/cp -r -a ${1} ${TMPFS}${2}
+                echo "cp -r -a ${1} ${TMPFS}${2}" >>$LOG
+            fi
+			# the link has already be in place on the image, so nothing else to do!
+			;;
+
         link,ro)
  			# need to make sure its parent directory exists:
 			if [ ! -d ${TMPFS}${PPATH} ]; then

@@ -212,6 +212,10 @@ sub process_request {
 	}
 
     my $listNew = $synclist[0]; 
+    # for compatiable reason, replace "tmpfs,rw" with "link" option in xCAT 2.5 or later
+    for (@{$listNew}) {
+        s/tmpfs,rw/link/;
+    }
 
     # the directory/file in litefile table must be the absolute path ("/***")
     foreach my $entry (@$listNew) {

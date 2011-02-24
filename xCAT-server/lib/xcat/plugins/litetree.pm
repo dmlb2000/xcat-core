@@ -382,16 +382,16 @@ sub mergeArrays {
 				if (xCAT::Utils->isAIX()) {
 					$o = "rw";  # default option if not provided
 				} else {
-					$o = "tmpfs";
+					# for compatible reason, the default option is interpreted to "tmpfs,rw"
+					$o = "tmpfs,rw";
 				}
 			}
 
             if ($_->{file} eq "/etc/mtab") {
                 $doesMtabExists = 1;
-                # TODO
-                # let the user know the "link" option should be with
+		# for compatible reason, if it exists in the litefile table, it means the litefile table is generated in 2.4 xCAT
                 # /etc/mtab
-                $o = "link";
+                $o = "tmpfs,rw";
             }
 
 			# TODO: put some logic in here to make sure that ro is alone.
