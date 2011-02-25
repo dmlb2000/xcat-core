@@ -39,6 +39,7 @@ my $output_handler; #Pointer to the function to drive results to client
 my $executerequest;
 my $usehostnamesforvcenter;
 my %tablecfg; #to hold the tables
+my %hostrefbynode;
 my $currkey;
 my $requester;
 my $viavcenter;
@@ -1148,7 +1149,7 @@ sub poweron_task_callback {
     } elsif ($state eq 'error') {
         relay_vmware_err($task,"",$node);
     }  elsif ($q and $q->text =~ /^msg.uuid.altered:/ and ($q->choice->choiceInfo->[0]->summary eq 'Cancel' and ($q->choice->choiceInfo->[0]->key eq '0'))) { #make sure it is what is what we have seen it to be
-        if ($parms->{forceon} and $q->choice->choiceInfo->[1]->summary eq 'I (_)?moved it' and $q->choice->choiceInfo->[1]->key eq '1') { #answer the question as 'moved'
+        if ($parms->{forceon} and $q->choice->choiceInfo->[1]->summary =~ /I (_)?moved it/ and $q->choice->choiceInfo->[1]->key eq '1') { #answer the question as 'moved'
             $vm->AnswerVM(questionId=>$q->id,answerChoice=>'1');
         } else {
             $vm->AnswerVM(questionId=>$q->id,answerChoice=>'0');
@@ -1596,24 +1597,19 @@ sub generic_vm_operation { #The general form of firing per-vm requests to ESX hy
     }
     foreach $hyp (keys %hyphash) {
         if ($viavcenterbyhyp->{$hyp}) {
-            if ($vcviews{$hyphash{$hyp}->{vcenter}->{name}}) { next; }
-            confess "I didn't expect this at all...\n"; #remove if hit, but want to see if this actually goes further..
-            #$vcviews{$hyphash{$hyp}->{vcenter}->{name}} = $hyphash{$hyp}->{conn}->find_entity_views(view_type => 'VirtualMachine',properties=>$properties);
             foreach (@{$vcviews{$hyphash{$hyp}->{vcenter}->{name}}}) {
                 my $node = $_->{'config.name'};
                 unless (defined $tablecfg{vm}->{$node}) {
                     $node =~ s/\..*//; #try the short name;
                 }
                 if (defined $tablecfg{vm}->{$node}) { #see if the host pointer requires a refresh 
+		    my $hostref = $hostrefbynode{$node};
+		    if ($hostref eq $_->{'runtime.host'}->value) { next; } #the actual host reference  matches the one that we got when populating hostviews based on what the table had to say #TODO: does this mean it is buggy if we want to mkvm/rmigrate/etc if the current vm.host is wrong and the noderange doesn't have something on the right hostview making us not get it in the
+		    #mass request?  Or is it just slower because it hand gets host views?
                     my $host = $hyphash{$hyp}->{conn}->get_view(mo_ref=>$_->{'runtime.host'},properties=>['summary.config.name']);
-                    $host = $host->{'summary.config.name'};
-                    if ( $tablecfg{vm}->{$node}->[0]->{host} eq "$host" ) { next; }
-                    my $newnhost = inet_aton($host);
-                    my $oldnhost = inet_aton($tablecfg{vm}->{$node}->[0]->{host});
-                    if ($newnhost eq $oldnhost) { next; } #it resolved fine
+		    $host = $host->{'summary.config.name'};
                     my $shost = $host;
                     $shost =~ s/\..*//;
-                    if ( $tablecfg{vm}->{$node}->[0]->{host} eq "$shost" ) { next; }
                     #time to figure out which of these is a node
                     my @nodes = noderange("$host,$shost");
                     my $vmtab = xCAT::Table->new("vm",-create=>1);
@@ -1621,7 +1617,6 @@ sub generic_vm_operation { #The general form of firing per-vm requests to ESX hy
                         die "Error opening vm table";
                     }
                     if ($nodes[0]) {
-                        print $node. " and ".$nodes[0];
                         $vmtab->setNodeAttribs($node,{host=>$nodes[0]});
                     } #else {
                       #  $vmtab->setNodeAttribs($node,{host=>$host});
@@ -2715,21 +2710,30 @@ sub populate_vcenter_hostviews {
         my $hosts = join(")|(",@hypervisors);
         $hosts = '^(('.$hosts.'))(\z|\.)';
         my $search = qr/$hosts/;
-        my @hypviews = @{$vcenterhash{$vcenter}->{conn}->find_entity_views(view_type=>'HostSystem',properties=>['summary.config.name','summary.runtime.connectionState','runtime.inMaintenanceMode','parent','configManager'],filter=>{'summary.config.name'=>$search})};
+        my @hypviews = @{$vcenterhash{$vcenter}->{conn}->find_entity_views(view_type=>'HostSystem',properties=>['summary.config.name','summary.runtime.connectionState','runtime.inMaintenanceMode','parent','configManager','summary.host'],filter=>{'summary.config.name'=>$search})};
         foreach (@hypviews) {
             my $hypname = $_->{'summary.config.name'};
+	    my $hypv=$_;
+	    my $hyp;
             if ($vcenterhash{$vcenter}->{allhyps}->{$hypname}) { #simplest case, config.name is exactly the same as node name
                 $vcenterhash{$vcenter}->{hostviews}->{$hypname} = $_;
+		$hyp=$hypname;
             } elsif ($nametohypmap{$hypname}) { #second case, there is a name mapping this to a real name
                 $vcenterhash{$vcenter}->{hostviews}->{$nametohypmap{$hypname}} = $_;
+		$hyp=$nametohypmap{$hypname};
             } else { #name as-is doesn't work, start stripping domain and hope for the best
                 $hypname =~ s/\..*//;
                 if ($vcenterhash{$vcenter}->{allhyps}->{$hypname}) { #shortname is a node
                     $vcenterhash{$vcenter}->{hostviews}->{$hypname} = $_;
+		    $hyp=$hypname;
                 } elsif ($nametohypmap{$hypname}) { #alias for node
                     $vcenterhash{$vcenter}->{hostviews}->{$nametohypmap{$hypname}} = $_;
+		    $hyp=$nametohypmap{$hypname};
                 }
             }
+	    foreach my $nodename (keys %{$hyphash{$hyp}->{nodes}}) {
+	    	$hostrefbynode{$nodename}=$hypv->{'summary.host'}->value;
+	    }
         }
         $iterations--;
         @hypervisors=();
