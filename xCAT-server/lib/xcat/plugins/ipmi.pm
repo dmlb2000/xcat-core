@@ -1073,7 +1073,7 @@ sub getrvidparms_with_buildid {
     my $baseurl = "http://".$sessdata->{ipmisession}->{bmc}."/";
     my $response = $browser->request(POST $baseurl."/session/create",'Content-Type'=>"text/xml",Content=>$message);
     unless ($response->content eq "ok") {
-        sendmsg ([1,"Server returned unexpected data"],$callback,$sessdata->{node},%allerrornodes);
+        xCAT::SvrUtils::sendmsg ([1,"Server returned unexpected data"],$callback,$sessdata->{node},%allerrornodes);
         return;
     }
 
@@ -1081,7 +1081,8 @@ sub getrvidparms_with_buildid {
     $response = $browser->request(GET $baseurl."/kvm/kvm/jnlp");
     my $jnlp = $response->content;
     if ($jnlp =~ /This advanced option requires the purchase and installation/) {
-        sendmsg ([1,"Node does not have feature key for remote video"],$sessdata->{node},%allerrornodes);
+        xCAT::SvrUtils::sendmsg ([1,"Node does not have feature key for remote video"],$callback,$sessdata->{node},%allerrornodes);
+        return;
     }
     my $currnode = $sessdata->{node};
     $jnlp =~ s!argument>title=.*Video Viewer</argument>!argument>title=$currnode wvid</argument>!;
