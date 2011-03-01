@@ -37,6 +37,7 @@ my $rc = 0;
 my $usesshonaix = $ENV{'USESSHONAIX'};
 my $master      = $ENV{'MASTER'};
 my $node        = $ENV{'NODE'};
+my $nodetype     = $ENV{'NTYPE'};
 my $msg;
 my $home;
 my $cmd;
@@ -181,7 +182,7 @@ sub setupSSH
         `logger -t xcat $msg`;
     }
 
-	if ( -f "/etc/xCATSN") {
+        if ( $nodetype eq "service") {	
 		&runcmd("mkdir -p /etc/xcat/hostkeys; cp /etc/ssh/ssh* /etc/xcat/hostkeys/. > /dev/null 2>&1");
 	}
 
