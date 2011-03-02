@@ -3899,6 +3899,9 @@ sub cpNetbootImages {
                 system("umount /mnt/xcat");
                 return;
             }
+	    if (-f "/mnt/xcat/mod.tgz") { #we have just copied over pointless custom mod with no content
+		unlink("$destDir/mod.tgz");
+	    }
             chdir("/tmp");
             system("umount /mnt/xcat");
             print "tempDir: $tmpDir\n";
