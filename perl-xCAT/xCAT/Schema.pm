@@ -785,7 +785,7 @@ site => {
    "              If value is set to a hostname, the directory in tftpdir\n".
    "              will be mounted from that hostname on the SN\n\n". 
    " timezone:  (e.g. America/New_York)\n\n".
-   " tftpdir:  tftp directory path. Default is /tftpdir\n\n".
+   " tftpdir:  tftp directory path. Default is /tftpboot\n\n".
    " useSSHonAIX:  (yes/1 or no/0). If yes, ssh/scp will be setup and used. If no,\n".
    "               rsh/rcp will be setup and used on AIX. Default is yes.\n\n".
    " vcenterautojoin: When set to no, the VMWare plugin will not attempt to auto remove and add hypervisors while trying to perform operations.  If users or tasks outside of xCAT perform the joining this assures xCAT will not interfere.\n\n".
