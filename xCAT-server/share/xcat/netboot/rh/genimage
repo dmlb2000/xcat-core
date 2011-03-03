@@ -971,6 +971,8 @@ if [ -z "\$IFACE" ]; then
 fi
 
 export IFACE=\$IFACE
+echo #!/sbin/nash > /bin/netstart
+echo network --device \$IFACE --bootproto dhcp >> /bin/netstart
 
 netstart \$IFACE
 while ! ifconfig | grep inet; do
