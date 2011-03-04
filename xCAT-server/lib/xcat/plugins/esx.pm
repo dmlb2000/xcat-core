@@ -146,21 +146,30 @@ sub preprocess_request {
 	}
 
 	my $vmtabhash = $vmtab->getNodesAttribs($noderange,['host','migrationdest']);
+	my $atleastonenode=0;
 	foreach my $node (@$noderange){
         if ($command eq "rmhypervisor" or $command eq 'lsvm' or $command eq 'rshutdown') {
+		$atleastonenode=1;
             $hyp_hash{$node}{nodes} = [$node];
         } else {
         my $ent = $vmtabhash->{$node}->[0];
 		if(defined($ent->{host})) {
+		$atleastonenode=1;
 			push @{$hyp_hash{$ent->{host}}{nodes}}, $node;
 		} elsif (defined($ent->{migrationdest})) {
+		$atleastonenode=1;
             $cluster_hash{$ent->{migrationdest}}->{nodes}->{$node}=1;
 		} else {
-			$callback->({data=>["no host or cluster defined for guest $node"]});
-			$request = {};
-			return;
+        		xCAT::SvrUtils::sendmsg([1,"no host or cluster defined for guest $node"], $callback,$node);
+			next;
+			#$request = {};
+			#return;
 		}
         }
+	}
+	unless ($atleastonenode) {
+		$request = {};
+		return;
 	}
 
 	# find service nodes for the MMs
@@ -1146,6 +1155,10 @@ sub migrate_callback {
    if ($hostview) { #this means vcenter still has it in inventory, but on a dead node...
                     #unfortunately, vcenter won't give up the old one until we zap the dead hypervisor
                     #also unfortunately, it doesn't make it easy to find said hypervisor..
+	unless ($vcenterautojoin) {
+     		xCAT::SvrUtils::sendmsg([1,"Source hypervisor appears to be dead.  It must be removed from vCenter inventory (rmhypervisor) in order for xCAT to successfully migrate when vCenter automembership is disabled via site"], $output_handler,$parms->{node});
+		return;
+	}
         $hostview = $hyphash{$parms->{src}}->{conn}->get_view(mo_ref=>$hyphash{$parms->{src}}->{deletionref});
        	$task = $hostview->Destroy_Task();
         $running_tasks{$task}->{task} = $task;
