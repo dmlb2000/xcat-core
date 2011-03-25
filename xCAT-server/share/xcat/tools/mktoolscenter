@@ -296,16 +296,16 @@ if ( system("cp $srcdir/$util $repo") or system("cp $asudir/$asu $repo")) {
 
 my $optstr = "";
 if ($proxy{host} ne "") {
-  $optstr = " --proxy-address $proxy{host} --proxy-port $proxy{port}";
+  $optstr = " --proxy-address=$proxy{host} --proxy-port=$proxy{port}";
   if ($proxy{user} ne "") {
-    $optstr .= " --proxy-user $proxy{user}";
+    $optstr .= " --proxy-user=$proxy{user}";
   }
   if ($proxy{pw} ne "") {
-    $optstr .= " --proxy-password $proxy{pw}";
+    $optstr .= " --proxy-password=$proxy{pw}";
   }
 }
 
-if ( system("chmod +x $repo/$util") or system("cd $repo; tar -zxf $asu") or system("cd $repo; ./$util --tui -m $machines $optstr")) {
+if ( system("chmod +x $repo/$util") or system("cd $repo; tar -zxf $asu") or system("cd $repo; ./$util --tui -m $machines $optstr -l .")) {
   output("Error executing $repo/$util");
   exit;
 }
@@ -502,7 +502,7 @@ if (system($editstr1)) {
   exit;
 }
 
-if ( system("cd $sandbox; cp $repo/asu* .; cp $repo/cdc_interface* .; cp $repo/$util .; cp -a $repo/uxspi .; cp $repo/ibm_utl_boot* .; echo y |./$util --tui --pxe=$path --no-acquire --latest --force")) {
+if ( system("cd $sandbox; cp $repo/asu* .; cp $repo/cdc_interface* .; cp $repo/$util .; cp -a $repo/uxspi .; cp $repo/ibm_utl_boot* .; echo y |./$util --tui --pxe=$path --no-acquire --latest --force -l .")) {
   output("Error executing $path/$util for the second time");
   exit;
 }
