@@ -3984,16 +3984,34 @@ sub validate_ip
 sub isMounted
 {
     my ($class, $directory) = @_;
-    my $cmd = "df -P $directory";
-    my @output = xCAT::Utils->runcmd($cmd, -1);
-    foreach my $line (@output)
-    {
-        my ($file_sys, $blocks, $used, $avail, $cap, $mount_point) =
-          split(' ', $line);
-        if ($mount_point eq $directory)
-        {
-            return 1;
+    my $cmd;
+    my @output;
+    if (-e $directory) {  # does the directory exist
+      if (xCAT::Utils->isLinux()) {
+        $cmd = "df -T -P $directory";
+        @output= xCAT::Utils->runcmd($cmd, -1);
+        foreach my $line (@output){
+          my ($file_sys, $type, $blocks, $used, $avail, $per, $mount_point) = 
+           split(' ', $line);
+          $type=~ s/\s*//g; # remove blanks
+          if ( $type =~ /^nfs/ )
+          {
+             return 1;
+          }
         }
+      } else { #AIX
+       $cmd = "/usr/sysv/bin/df -n $directory";
+       @output = xCAT::Utils->runcmd($cmd, -1);
+       foreach my $line (@output){
+          my ($dir, $colon, $type) = 
+           split(' ', $line);
+          $type=~ s/\s*//g; # remove blanks
+          if ( $type =~ /^nfs/ )
+          {
+             return 1;
+          }
+       }
+      }
     }
     return 0;
 }
