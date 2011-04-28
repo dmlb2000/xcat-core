@@ -14,10 +14,15 @@ BEGIN {
         print "   <command>getpostscript</command>" |& server
         print "</xcatrequest>" |& server
 
+        start = 0
         while (server |& getline) {
-                if (match($0,/^\s*</)) {
-                  print $0 
+                if (match($0,"<xcatresponse>")) {
+                  start = 1
                 }
+                if (start == 1) {
+                  print $0
+                }
+
                 if (match($0,"<serverdone>")) {
                   quit = "yes"
                 }
