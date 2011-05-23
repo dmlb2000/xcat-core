@@ -222,8 +222,8 @@ sub makescript {
 	# !!!!!  it must be an unencrypted value for AIX!!!!
 	# - user will have to reset if this is a security issue
 	$os =~ s/\s*$//;
-	$os =~ tr/A-Z/a-z/;    # Convert to lowercase
-	if ($os eq "aix") {
+	#$os =~ tr/A-Z/a-z/;    # Convert to lowercase
+	if ($os eq "aix" || $os eq "AIX")
 		my $passwdtab = xCAT::Table->new('passwd');
 		unless ( $passwdtab) {
 			my $rsp;
