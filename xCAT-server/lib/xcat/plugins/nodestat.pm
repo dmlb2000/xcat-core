@@ -20,6 +20,7 @@ use xCAT::NetworkUtils;
 
 
 my %nodesetstats;
+my %chainhash;
 my %default_ports = (
     'ftp' => '21',
     'ssh' => '22',
@@ -495,6 +496,10 @@ sub process_request_nmap {
    my %nodebyip;
    my @livenodes;
    my %unknownnodes;
+   my $chaintab = xCAT::Table->new('chain',-create=>0);
+   if ($chaintab) {
+	%chainhash = %{$chaintab->getNodesAttribs(\@nodes,['currstate'])};
+   }
    foreach (@nodes) {
 	$unknownnodes{$_}=1;
 	my $ip = undef;
@@ -578,9 +583,9 @@ sub process_request_nmap {
           if (/^PORT/) { next; }
           ($port,$state) = split;
           if ($port =~ /^(\d*)\// and $state eq 'open') {
-              if ($1 eq "3001") {
+              if ($1 eq "3001" and $chainhash{$currnode}->[0]->{currstate} =~ /^install/) {
                 $installquerypossible=1; #It is possible to actually query node
-              } else {
+              } elsif ($1 ne "3001") {
                 $states{$portservices{$1}}=1;
               }
           }
