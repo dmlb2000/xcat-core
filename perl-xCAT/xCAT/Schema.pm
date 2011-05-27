@@ -803,6 +803,10 @@ site => {
    "                 service node. This will improve the performance in a flat network.\n\n".
    " enableASMI:  (yes/1 or no/0). If yes, ASMI method will be used after fsp-api. If no,\n".
    "               when fsp-api is used, ASMI method will not be used. Default is no.\n\n".
+   " vsftp:       Default is 'y'. If set to 'n', the xcatd on the mn will not automatically \n".
+   "              bring up the vsftpd. This setting does not apply to the sn, for sn\n".
+   "              you need to set servicenode.ftpserver=0 if you do not want the xcatd\n".
+   "              bring up vsftpd.\n\n".
    " xcatconfdir:  Where xCAT config data is (default /etc/xcat).\n\n".
    " xcatdport:  The port used by the xcatd daemon for client/server communication.\n\n".
    " xcatiport:  The port used by xcatd to receive install status updates from nodes.\n\n",
