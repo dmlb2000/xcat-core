@@ -932,6 +932,8 @@ sub initDB
 
         $chtabcmds .= "$::XCATROOT/sbin/chtab key=useNmapfromMN site.value=no;";
         $chtabcmds .= "$::XCATROOT/sbin/chtab key=enableASMI site.value=no;";
+        $chtabcmds .= "$::XCATROOT/sbin/chtab key=vsftp site.value=y;";
+        $chtabcmds .= "$::XCATROOT/sbin/chtab key=vsftp site.value=y;";
 
         if ($::osname eq 'AIX')
         {
