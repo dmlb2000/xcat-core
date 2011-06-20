@@ -312,7 +312,9 @@ sub makescript {
 	      elsif ($os =~ /sles.*/) { $platform = "sles"; }
 	      elsif ($os =~ /aix.*/) { $platform = "aix"; }
 	  }
-	  if (($nodesetstate) && ($nodesetstate eq "netboot")) { $stat="netboot";}
+          if (($nodesetstate) && ($nodesetstate eq "netboot" || $nodesetstate eq "statelite")) {
+              $stat = "netboot";
+          }
 
 	  $ospkglist=xCAT::SvrUtils->get_pkglist_file_name("$installroot/custom/$stat/$platform", $profile,  $os, $arch);
 	  if (!$ospkglist) { $ospkglist=xCAT::SvrUtils->get_pkglist_file_name("$::XCATROOT/share/xcat/$stat/$platform", $profile, $os, $arch); }
@@ -359,12 +361,15 @@ sub makescript {
 	      $syncfile=$ref->{'synclists'}
 	  }
       }
-  } else {
+  }
+  if (!$syncfile) {
       my $stat="install";
-      if (($nodesetstate) && ($nodesetstate eq "netboot")) { $stat="netboot";}
+      if (($nodesetstate) && ($nodesetstate eq "netboot" || $nodesetstate eq "statelite")) {
+          $stat = "netboot";
+      }
       $syncfile = xCAT::SvrUtils->getsynclistfile(undef, $os, $arch, $profile, $stat);
   }
-  if (! defined ($syncfile)) {
+  if (!$syncfile) {
       push @scriptd, "NOSYNCFILES=1\n";
       push @scriptd, "export NOSYNCFILES\n";
   }
@@ -512,7 +517,7 @@ sub get_pkglist_tex
 		     !/^\s*#NEW_INSTALL_LIST#/ ); #-- skip comments
            if (/^@(.*)/) {  #for groups that has space in name
 	       my $save=$1;
-	       if ($1 =~ / /) { $_ = "\@\'" . $save . "\'"; }
+               if ($1 =~ / /) { $_ = "\@" . $save; }
 	   }
 	   push(@otherpkgs,$_);
        }
