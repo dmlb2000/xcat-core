@@ -46,6 +46,7 @@ sub getNodesetStates
         my @aixnodes    = ();
         my @pxenodes    = ();
         my @yabootnodes = ();
+        my @xnbanodes= ();
         my $tabdata     = $tab->getNodesAttribs(\@nodes, ['node', 'netboot']);
         foreach my $node (@nodes)
         {
@@ -59,6 +60,10 @@ sub getNodesetStates
             elsif ($nb eq "pxe")
             {
                 push(@pxenodes, $node);
+            }
+            elsif ($nb eq "xnba")
+            {
+                push(@xnbanodes, $node);
             }
             elsif ($nb eq "aixinstall")
             {
@@ -88,6 +93,18 @@ sub getNodesetStates
             require xCAT_plugin::pxe;
             @retarray =
               xCAT_plugin::pxe::getNodesetStates(\@pxenodes, $hashref);
+            if ($retarray[0])
+            {
+                $retcode = $retarray[0];
+                $errormsg .= $retarray[1];
+                xCAT::MsgUtils->message('E', $retarray[1]);
+            }
+        }
+        if (@xnbanodes > 0)
+        {
+            require xCAT_plugin::xnba;
+            @retarray =
+              xCAT_plugin::xnba::getNodesetStates(\@xnbanodes, $hashref);
             if ($retarray[0])
             {
                 $retcode = $retarray[0];
