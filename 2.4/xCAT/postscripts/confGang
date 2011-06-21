@@ -1,0 +1,129 @@
+#!/bin/sh
+#get IP address of MS
+OS=`uname`
+echo "the OS is $OS"
+logger -t xCAT "the OS is $OS"
+ms_ip=$MONMASTER
+echo "MS IP is $ms_ip"
+logger -t xCAT "the MS is $ms_ip"
+result=`ping -c1 $MONMASTER 2>&1`
+ if [ $? -eq 0 ]; then
+   index1=`expr index "$result" "\("`
+   index2=`expr index "$result" "\)"`
+   #ms_ip=${result:$index1+1:$index2-$index1-2}
+   pos=`expr $index1 + 1`
+   length=`expr $index2 - $index1`
+   length=`expr $length - 1`
+   ms_ip=`expr substr "$result" $pos $length`
+   echo final is $ms_ip
+ else
+   logger -t xCAT "Gangliamon setup"
+ fi
+
+CLUSTER=\"$MONSERVER\"
+echo "cluster is $CLUSTER"
+logger -t xCAT "cluster is $CLUSTER"
+MASTER=$ms_ip
+#echo "The new IP is: $NEW_IP"
+#echo "I will replace now....
+gmond_conf="/etc/ganglia/gmond.conf"
+gmond_conf_old="/etc/gmond.conf"
+ 
+    if [ $OS == "AIX" ]; then
+      echo "into AIX loop"
+      logger -t xCAT "into AIX loop"
+      if [ -f  $gmond_conf_old ]; then
+       echo "ganglia version 3.0.7"
+       logger -t xCAT "ganglia version 3.0.7"
+       grep "xCAT gmond settings done" $gmond_conf_old
+         if [ $? -gt 0 ]; then
+           /bin/cp -f $gmond_conf_old /etc/gmond.conf.orig
+           sed -e "s/setuid = yes/setuid = no/1" $gmond_conf_old > /etc/gmond.conf1
+           sed -e 's/name = "unspecified"/name='$CLUSTER'/1' /etc/gmond.conf1 > /etc/gmond.conf2
+           sed -e "1,40s/mcast_join = .*/host = $MASTER/" /etc/gmond.conf2 > /etc/gmond.conf3
+           sed -e 's/mcast_join/#/g' /etc/gmond.conf3 > /etc/gmond.conf4
+           sed -e "s/bind/#/g" /etc/gmond.conf4 > /etc/gmond.conf5
+           /bin/cp -f /etc/gmond.conf5 $gmond_conf_old
+           rm -f /etc/gmond.conf1 /etc/gmond.conf2 /etc/gmond.conf3 /etc/gmond.conf4 /etc/gmond.conf5
+           echo "# xCAT gmond settings done sh" >> $gmond_conf_old
+         fi
+       fi
+    fi   
+
+
+    if [ $OS == "AIX" ]; then
+      echo "into AIX new loop"
+      logger -t xCAT "into AIX new loop"
+      if [ -f  $gmond_conf ]; then
+      echo "ganglia version v3.10"
+      logger -t xCAT "ganglia version v3.10"
+       grep "xCAT gmond settings done" $gmond_conf
+         if [ $? -gt 0 ]; then
+           /bin/cp -f $gmond_conf /etc/ganglia/gmond.conf.orig
+           sed -e "s/setuid = yes/setuid = no/1" $gmond_conf > /etc/ganglia/gmond.conf1
+           sed -e 's/name = "unspecified"/name='$CLUSTER'/1' /etc/ganglia/gmond.conf1 > /etc/ganglia/gmond.conf2
+           sed -e "1,40s/mcast_join = .*/host = $MASTER/" /etc/ganglia/gmond.conf2 > /etc/ganglia/gmond.conf3
+           sed -e 's/mcast_join/#/g' /etc/ganglia/gmond.conf3 > /etc/ganglia/gmond.conf4
+           sed -e "s/bind/#/g" /etc/ganglia/gmond.conf4 > /etc/ganglia/gmond.conf5
+           /bin/cp -f /etc/ganglia/gmond.conf5 $gmond_conf
+           rm -f /etc/ganglia/gmond.conf1 /etc/ganglia/gmond.conf2 /etc/ganglia/gmond.conf3 /etc/ganglia/gmond.conf4 /etc/ganglia/gmond.conf5
+           echo "# xCAT gmond settings done sh" >> $gmond_conf
+         fi
+       fi
+    fi
+
+
+
+
+
+     if [ $OS != "AIX" ]; then
+       echo "not AIX"
+       logger -t xCAT "not AIX"
+     if [ -f  $gmond_conf ]; then
+       grep "xCAT gmond settings done" $gmond_conf
+         if [ $? -gt 0 ]; then
+           /bin/cp -f $gmond_conf /etc/ganglia/gmond.conf.orig
+           sed -i 's/setuid = yes/setuid = no/1' $gmond_conf
+           sed -i 's/name = "unspecified"/name='$CLUSTER'/1' $gmond_conf
+           sed -e "1,40s/mcast_join = .*/host = $MASTER/" $gmond_conf > /etc/temp.conf
+           /bin/cp -f /etc/temp.conf $gmond_conf
+           sed -i 's/mcast_join/#/g' $gmond_conf
+           sed -i 's/bind/#/g' $gmond_conf
+           echo "# xCAT gmond settings done sh" >> $gmond_conf
+         fi
+       fi
+     fi
+ 
+
+ if [ $OS != "AIX" ]; then
+       echo "not AIX"
+       logger -t xCAT "not AIX"
+
+    if [ -f $gmond_conf_old ]; then
+      grep "xCAT gmond settings done" $gmond_conf_old
+         if [ $? -gt 0 ]; then
+           /bin/cp -f $gmond_conf_old /etc/gmond.conf.orig
+           sed -i 's/setuid = yes/setuid = no/1' $gmond_conf_old
+           sed -i 's/name = "unspecified"/name='$CLUSTER'/1' $gmond_conf_old
+           sed -e "1,40s/mcast_join = .*/host = $MASTER/" $gmond_conf_old > /etc/temp.conf
+           /bin/cp -f /etc/temp.conf $gmond_conf_old
+           sed -i 's/mcast_join/#/g' $gmond_conf_old
+           sed -i 's/bind/#/g' $gmond_conf_old
+           echo "# xCAT gmond settings done sh_old" >> $gmond_conf_old
+         fi 
+    fi
+fi
+
+     if [ ! -f  $gmond_conf ]; then 
+       #  echo "file not found"
+          logger -t gmonfail "gmond configuration file not found"
+          logger -t xCAT "gmond configuration file not found"
+     fi
+
+     if [ ! -f  $gmond_conf_old ]; then
+       #  echo "file not found"
+       logger -t gmonfail "gmond configuration file not found"
+          logger -t xCAT "gmond configuration file not found"
+     fi
+
+exit 0 

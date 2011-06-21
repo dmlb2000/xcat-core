@@ -1,0 +1,148 @@
+=head1 NAME
+
+B<mkvm> - Creates HMC- and IVM-managed partitions.
+
+=head1 SYNOPSIS
+
+=head2 Common:
+
+I<mkvm [-h| --help]>
+
+I<mkvm [-v| --version]>
+
+=head2 For PPC:
+
+I<mkvm [-V| --verbose] noderange -i id -l singlenode>
+
+I<mkvm [-V| --verbose] noderange -c destcec -p profile>
+I<mkvm [-V| --verbose] noderange --full>
+
+=head2 For KVM:
+
+I<mkvm noderange -m|--master mastername -s|--size disksize -f|--force>
+
+=head1 DESCRIPTION
+
+=head2 For PPC:
+
+The first form of mkvm command creates new partition(s) with the same profile/resources as the partition specified by I<singlenode>. The -i and I<noderange> specify the starting numeric partition number and the noderange for the newly created partitions, respectively. The LHEA port numbers and the HCA index numbers will be automatically increased if they are defined in the source partition. 
+
+The second form of this command duplicates all the partitions from the source specified by I<profile> to the destination specified by I<destcec>. The source and destination CECs can be managed by different HMCs.
+
+Please make sure the nodes in the I<noderange> is defined in the I<nodelist> table and the I<mgt> is set to 'hmc' in the I<nodehm> table before running this command.
+
+Please note that the mkvm command currently only supports creating standard LPARs, not virtual LPARs working with VIOS server.
+
+=head2 For KVM:
+
+mkvm ....
+
+=head1 OPTIONS
+
+
+B<-h|--help>       Display usage message.
+
+B<-c>              The cec (fsp) name for the destination.
+
+B<-i>              Starting numeric id of the newly created partitions.
+
+B<-l>              The partition name of the source.
+
+B<-p>              The file that contains the profiles for the source partitions.
+B<--full>          Request to create a new full system partition for each CEC.
+
+B<-v|--version>    Command Version.
+
+B<-V|--verbose>    Verbose output.
+
+
+=head1 RETURN VALUE
+
+0 The command completed successfully.
+
+1 An error has occurred.
+
+=head1 EXAMPLES
+
+1. To create a new partition lpar5 based on the profile/resources of lpar4, enter:
+
+I<mkdef -t node -o lpar5 mgt=hmc groups=all>
+
+then:
+
+I<mkvm lpar5 -i 5 l lpar4>
+
+Output is similar to:
+
+lpar5: Success
+
+
+2. To create new partitions lpar5-lpar8 based on the profile/resources of lpar4, enter:
+
+I<mkdef -t node -o lpar5-lpar8 mgt=hmc groups=all>
+
+then:
+
+I<mkvm lpar5-lpar8 -i 5 lpar4>
+
+Output is similar to:
+
+lpar5: Success
+
+lpar6: Success
+
+lpar7: Success
+
+lpar8: Success
+
+
+3. To duplicate all the partitions associated with cec01 on cec02, first save the lpars from cec01 to a file:
+
+I<lsvm lpar01-lpar04> > I</tmp/myprofile> 
+
+then create lpars on cec02:
+
+I<mkvm lpar05-lpar08 -c cec02 -p /tmp/myprofile>
+
+Output is similar to:
+
+lpar5: Success
+
+lpar6: Success
+
+lpar7: Success
+
+lpar8: Success
+
+
+4. To duplicate all the partitions associated with cec01 on cec02, one is for cec01, the other is for cec02:
+
+I<mkdef -t node -o lpar5,lpar6 mgt=hmc groups=all>
+
+I<chtab node=lpar5 ppc.parent=cec01>
+
+I<chtab node=lpar6 ppc.parent=cec02>
+
+then create lpars on cec01 and cec02:
+
+I<mkvm lpar5,lpar6 --full>
+
+Output is similar to:
+
+lpar5: Success
+
+lpar6: Success
+
+
+=head1 FILES
+
+/opt/xcat/bin/mkvm
+
+
+=head1 SEE ALSO
+
+L<chvm(1)|chvm.1>, L<lsvm(1)|lsvm.1>, L<rmvm(1)|rmvm.1>
+
+
+
+

@@ -1,0 +1,478 @@
+=head1 NAME
+
+B<rspconfig> - Configures nodes' service processors
+
+=head1 SYNOPSIS
+
+B<rspconfig> [B<-h>|B<--help>|B<-v>|B<--version>]
+
+=head2 BMC/MPA specific:
+
+B<rspconfig> I<noderange> {B<alert>|B<snmpdest>|B<community>}
+
+B<rspconfig> I<noderange> B<alert>={B<on>|B<enable>|B<off>|B<disable>}
+
+B<rspconfig> I<noderange> B<snmpdest>=I<snmpmanager-IP>
+
+B<rspconfig> I<noderange> B<community>={B<public>|I<string>}
+
+=head2 BMC specific:
+
+B<rspconfig> I<noderange> {B<ip>|B<netmask>|B<gateway>|B<backupgateway>|B<garp>}
+
+B<rspconfig> I<noderange> B<garp>={I<time>}
+
+=head2 MPA specific:
+
+B<rspconfig> I<noderange> {B<sshcfg>|B<snmpcfg>|B<pd1>|B<pd2>|B<network>|B<swnet>|B<ntp>|B<textid>|B<frame>}
+
+B<rspconfig> I<noderange> B<sshcfg>={B<enable>|B<disable>}
+
+B<rspconfig> I<noderange> B<snmpcfg>={B<enable>|B<disable>}
+
+B<rspconfig> I<noderange> B<pd1>={B<nonred>|B<redwoperf>|B<redwperf>}
+
+B<rspconfig> I<noderange> B<pd2>={B<nonred>|B<redwoperf>|B<redwperf>}
+
+B<rspconfig> I<noderange> B<network>={[B<ip>],[B<host>],[B<gateway>],[B<netmask>]|B<*>}
+
+B<rspconfig> I<noderange> B<textid>={B<*|textid>}
+
+B<rspconfig> I<singlenode> B<frame>={B<frame_number>}
+
+B<rspconfig> I<noderange> B<frame>={B<*>}
+
+B<rspconfig> I<noderange> B<swnet>={[B<ip>],[B<gateway>],[B<netmask>]}
+
+B<rspconfig> I<noderange> B<ntp>={[B<ntpenable>],[B<ntpserver>],[B<frequency>],[B<v3>]}
+
+=head2 FSP specific:
+
+B<rspconfig> I<noderange> {B<autopower>|B<iocap>|B<decfg>|B<memdecfg>|B<procdecfg>|B<time>|B<date>|B<spdump>|B<sysdump>|B<network>}
+
+B<rspconfig> I<noderange> B<autopower>={B<enable>|B<disable>}
+
+B<rspconfig> I<noderange> B<iocap>={B<enable>|B<disable>}
+
+B<rspconfig> I<noderange> B<time>={B<hh:mm:ss>}
+
+B<rspconfig> I<noderange> B<date>={B<mm:dd:yyyy>}
+
+B<rspconfig> I<noderange> B<decfg>={B<enable|disable>:B<policyname,...>}
+
+B<rspconfig> I<noderange> B<procdecfg>={B<configure|deconfigure>:B<processingunit>:B<id,...>}
+
+B<rspconfig> I<noderange> B<memdecfg>={B<configure|deconfigure>:B<processingunit>:B<unit|bank>:B<id,...>>}
+
+B<rspconfig> I<noderange> B<network>={B<nic,*>}
+
+B<rspconfig> I<noderange> B<network>={B<nic,[IP,][hostname,][gateway,][netmask]>}
+
+B<rspconfig> I<noderange> B<network>={B<nic,0.0.0.0>}
+
+B<rspconfig> I<noderange> B<HMC_passwd>={B<currentpasswd,newpasswd>}
+
+B<rspconfig> I<noderange> B<admin_passwd>={B<currentpasswd,newpasswd>}
+
+B<rspconfig> I<noderange> B<general_passwd>={B<currentpasswd,newpasswd>}
+
+B<rspconfig> I<noderange> B<*_passwd>={B<currentpasswd,newpasswd>}
+
+B<rspconfig> I<noderange> {B<hostname>}
+
+B<rspconfig> I<noderange> B<hostname>={B<*|name>}
+
+=head2 BPA Specific:
+
+B<rspconfig> I<noderange> {B<network>}
+
+B<rspconfig> I<noderange> B<network>={B<nic,*>}
+
+B<rspconfig> I<noderange> B<network>={B<nic,[IP,][hostname,][gateway,][netmask]>}
+
+B<rspconfig> I<noderange> B<network>={B<nic,0.0.0.0>}
+
+B<rspconfig> I<noderange> B<HMC_passwd>={B<currentpasswd,newpasswd>}
+
+B<rspconfig> I<noderange> B<admin_passwd>={B<currentpasswd,newpasswd>}
+
+B<rspconfig> I<noderange> B<general_passwd>={B<currentpasswd,newpasswd>}
+
+B<rspconfig> I<noderange> B<*_passwd>={B<currentpasswd,newpasswd>}
+
+B<rspconfig> I<noderange> {B<hostname>}
+
+B<rspconfig> I<noderange> B<hostname>={B<*|name>}
+
+=head2 HMC Specific:
+
+B<rspconfig> I<noderange> {B<sshcfg>}
+
+B<rspconfig> I<noderange> B<sshcfg>={B<enable>|B<disable>}
+
+=head1 DESCRIPTION
+
+B<rspconfig> configures various settings in the nodes' service processors.  If only a keyword is
+specified, without the B<=>, it displays the current value.
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<alert>={I<on>|I<enable>|I<off>|I<disable>}
+
+Turn on or off SNMP alerts.
+
+=item B<autopower>={I<enable>|I<disable>}
+
+Select the policy for auto power restart. If enabled, the system will boot automatically once power is restored after a power disturbance.
+
+=item B<backupgateway>
+
+Get the BMC backup gateway ip address.
+
+=item B<community>={B<public>|I<string>}
+
+Get or set the SNMP commmunity value. The default is I<public>.
+
+=item B<date>={I<mm:dd:yyy>}
+
+Enter the current date.
+
+=item B<decfg>={I<enable|disable>:I<policyname,...>}
+
+Enables or disables deconfiguration policies.
+
+=item B<frame>={B<framenumber>|I<*>}
+
+Set or get frame number.  If no framenumber and * specified, framenumber for the nodes will be displayed and updated in xCAAT database.  If framenumber is specified, it only support single node and the framenumber will be set for that frame.  If * is specified, it supports noderange and all the frame numbers for the noderange will be read from xCAT database and set to frames. 
+
+=item B<frequency>
+
+The NTP update frequency (in minutes).
+
+=item B<garp>=I<time>
+
+Get or set Gratuitous ARP generation interval. The unit is number of 1/2 second.
+
+=item B<gateway>
+
+The gateway ip address.
+
+=item B<hostname>
+
+Display the CEC/BPA system names
+
+=item B<hostname>={I<*|name>}
+
+Set CEC/BPA system names to the names in xCAT DB or the input name.
+
+=item B<iocap>={I<enable>|I<disable>}
+
+Select the policy for I/O Adapter Enlarged Capacity. This option controls the size of PCI memory space allocated to each PCI slot.
+
+=item B<ip>
+
+The ip address.
+
+=item B<memdecfg>={I<configure|deconfigure>:I<processingunit>:I<unit|bank>:I<id,...>}
+
+Select whether each memory bank should be enabled or disabled. State changes take effect on the next platform boot.
+
+=item B<netmask>
+
+The subnet mask.
+
+=item B<network>={[I<ip>],[I<host>],[I<gateway>],[I<netmask>]|*}
+
+For MPA only. Get or set the MPA network parameters. If '*' is specified, all parameters are read from the xCAT database.
+
+=item B<network>={I<nic>,{[I<ip>],[I<host>],[I<gateway>],[I<netmask>]}|*}
+
+For FSP/BPA only. Get or set the FSP/BPA network parameters. If '*' is specified, all parameters are read from the xCAT database. 
+If the value of I<ip> is '0.0.0.0', this I<nic> will be configured as a DHCP client. Otherwise this I<nic> will be configured with a static IP.
+
+Note that IPs of FSP/BPAs will be updated with this option, user needs to put the new IPs to /etc/hosts manually or with xCAT command makehosts. For more details, see the man page of makehosts.
+
+=item B<nonred>
+
+Allows loss of redundancy.
+
+=item B<ntp>={[I<ntpenable>],[I<ntpserver>],[I<frequency>],[I<v3>]}
+
+Get or set the MPA Network Time Protocol (NTP) parameters.
+
+=item B<ntpenable>
+
+Enable or disable NTP (enable|disable).
+
+=item B<ntpserver>
+
+Get or set NTP server IP address or name.
+
+=item B<pd1>={B<nonred>|B<redwoperf>|B<redwperf>}
+
+Power Domain 1 - determines how an MPA responds to a loss of redundant power.
+
+=item B<pd2>={B<nonred>|B<redwoperf>|B<redwperf>}
+
+Power Domain 2 - determines how an MPA responds to a loss of redundant power.
+
+=item B<procdecfg>={I<configure|deconfigure>:I<processingunit>:I<id,...>}
+
+Selects whether each processor should be enabled or disabled. State changes take effect on the next platform boot.
+
+=item B<redwoperf>
+
+Prevents components from turning on that will cause loss of power redundancy.
+
+=item B<redwperf>
+
+Power throttles components to maintain power redundancy and prevents components from turning on that will cause loss of power redundancy.
+
+=item B<snmpcfg>={I<enable>|I<disable>}
+
+Enable or disable SNMP on MPA.
+
+=item B<snmpdest>=I<snmpmanager-IP>
+
+Get or set where the SNMP alerts should be sent to.
+
+=item B<spdump>
+
+Performs a service processor dump.
+
+=item B<sshcfg>={I<enable>|I<disable>}
+
+Enable or disable SSH on MPA.
+
+=item B<swnet>={[I<ip>],[I<gateway>],[I<netmask>]}
+
+Set the Switch network parameters.
+
+=item B<sysdump>
+
+Performs a system dump.
+
+=item B<time>={I<hh:mm:ss>}
+
+Enter the current time in UTC (Coordinated Universal Time) format.
+
+=item B<textid>={I<*|textid>}
+
+Set the blade or MPA textid. When using '*', the textid used is the node name specified on the command-line. Note that when specifying an actual textid, only a single node can be specified in the noderange.
+
+=item B<v3>
+
+Enable or disable v3 authentication (enable|disable).
+
+=item B<-h>|B<--help>
+
+Prints out a brief usage message.
+
+=item B<-v>, B<--version>
+
+Display the version number.
+
+=back
+
+
+=head1 EXAMPLES
+
+=over 3
+
+=item *
+
+To turn on SNMP alerts for node5:
+
+B<rspconfig> I<node5> B<alert>=B<on>
+
+ node5: Alerts: enabled
+
+=item *
+
+To display the destination setting for SNMP alerts for node4:
+
+B<rspconfig> I<node4 snmpdest>
+
+ node4: BMC SNMP Destination 1: 9.114.47.227
+
+=item *
+
+To display the frame number for frame 9A00-10000001
+
+B<rspconfig> I<9A00-10000001 frame>
+
+ 9A00-10000001: 1
+
+=item *
+
+To set the frame number for frame 9A00-10000001
+
+B<rspconfig> I<9A00-10000001 frame=2>
+
+ 9A00-10000001: SUCCESS
+
+=item *
+
+To set the frame numbers for frame 9A00-10000001 and 9A00-10000002
+
+B<rspconfig> I<9A00-10000001,9A00-10000002 frame=*>
+
+ 9A00-10000001: SUCCESS
+ 9A00-10000002: SUCCESS
+
+=item *
+
+To display the MPA network parameters for mm01:
+
+B<rspconfig> I<mm01 network>
+
+ mm01: MM IP: 192.168.1.47
+ mm01: MM Hostname: MM001125C31F28
+ mm01: Gateway: 192.168.1.254
+ mm01: Subnet Mask: 255.255.255.224
+
+=item *
+
+To change the MPA network parameters with the values in the xCAT database for mm01:
+
+B<rspconfig> I<mm01 network=*>
+
+ mm01: MM IP: 192.168.1.47
+ mm01: MM Hostname: mm01
+ mm01: Gateway: 192.168.1.254
+ mm01: Subnet Mask: 255.255.255.224
+
+=item *
+
+To change only the gateway parameter for the MPA network mm01:
+
+B<rspconfig> I<mm01 network=,,192.168.1.1,>
+
+ mm01: Gateway: 192.168.1.1
+
+=item *
+
+To display the FSP network parameters for fsp01:
+
+B<rspconfig> I<fsp01 network>
+
+ fsp01:
+        eth0:
+                IP Type: Dynamic
+                IP Address: 192.168.1.215
+                Hostname:
+                Gateway:
+                Netmask: 255.255.255.0
+
+        eth1:
+                IP Type: Dynamic
+                IP Address: 192.168.200.51
+                Hostname: fsp01
+                Gateway:
+                Netmask: 255.255.255.0
+
+=item *
+
+To change the FSP network parameters with the values in command line for eth0 on fsp01:
+
+B<rspconfig> I<fsp01 network=eth0,192.168.1.200,fsp01,,255.255.255.0>
+
+ fsp01: Success to set IP address,hostname,netmask
+
+=item *
+
+To change the FSP network parameters with the values in the xCAT database for eth0 on fsp01:
+
+B<rspconfig> I<fsp01 network=eth0,*>
+
+ fsp01: Success to set IP address,hostname,gateway,netmask
+
+=item *
+
+To configure eth0 on fsp01 to get dynamic IP address from DHCP server: 
+
+B<rspconfig> I<fsp01 network=eth0,0.0.0.0>
+
+ fsp01: Success to set IP type to dynamic.
+
+=item *
+
+To get the current power redundancy mode for power domain 1 on mm01:
+
+B<rspconfig> I<mm01 pd1>
+
+ mm01: Redundant without performance impact
+
+=item *
+
+To change the current power redundancy mode for power domain 1 on mm01 to non-redundant:
+
+B<rspconfig> I<mm01 pd1=nonred>
+
+ mm01: nonred
+
+=item *
+
+To enable NTP with an NTP server address of 192.168.1.1, an update frequency of 90 minutes, and with v3 authentication enabled on mm01:
+
+B<rspconfig> I<mm01 ntp=enable,192.168.1.1,90,enable>
+
+ mm01: NTP: disabled
+ mm01: NTP Server: 192.168.1.1
+ mm01: NTP: 90 (minutes)
+ mm01: NTP: enabled
+
+=item *
+
+To disable NTP v3 authentication only on mm01:
+
+B<rspconfig> I<mm01 ntp=,,,disable>
+
+ mm01: NTP v3: disabled
+
+=item *
+
+To disable Predictive Failure and L2 Failure deconfiguration policies on mm01:
+
+B<rspconfig> I<mm01 decfg=disable:predictive,L3>
+
+ mm01: Success
+
+=item *
+
+To deconfigure processors 4 and 5 of Processing Unit 0 on mm01:
+
+B<rspconfig> I<mm01 procedecfg=deconfigure:0:4,5>
+
+ mm01: Success
+
+=item *
+
+To deconfigure memory bank 9 and 10 of Processing Unit 0 on mm01:
+
+B<rspconfig> I<mm01 memdecfg=deconfigure:bank:0:9,10>
+
+ mm01: Success
+
+=back
+
+To update the existing admin password on fsp:
+
+B<rspconfig> I<fsp admin_passwd=admin,abc123>
+
+ fsp: Success
+
+To set the initial password for user HMC on fsp:
+
+B<rspconfig> I<fsp HMC_passwd=,abc123>
+
+ fsp: Success
+
+=head1 SEE ALSO
+
+L<noderange(3)|noderange.3>, L<rpower(1)|rpower.1>, L<rcons(1)|rcons.1>, L<rinv(1)|rinv.1>, L<rvitals(1)|rvitals.1>, L<rscan(1)|rscan.1>, L<rflash(1)|rflash.1>
+
+
+

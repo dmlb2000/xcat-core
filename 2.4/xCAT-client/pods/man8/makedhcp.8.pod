@@ -1,0 +1,111 @@
+=head1 NAME
+
+B<makedhcp> - Creates new dhcp configuration files and updates live dhcp configuration using omapi.
+
+=head1 SYNOPSIS
+
+B<makedhcp> B<-n>
+
+B<makedhcp> B<-a>
+
+B<makedhcp> B<-a -d>
+
+B<makedhcp> B<-d> I<noderange>
+
+B<makedhcp> I<noderange> [B<-s> I<statements>]
+
+B<makedhcp> [I<-h|--help>]
+
+
+=head1 DESCRIPTION
+
+The B<makedhcp> command configures the DHCP daemon on the local system so that xCAT
+can manage the nodes of the cluster during discovery, full install, diskless booting, and normal booting.
+With the B<-n> option, B<makedhcp> will create a dhcpd.conf file, including certain general parameters
+such as a dynamic range and omapi configuration.
+With a noderange or the B<-a> option, makedhcp will inject configuration data (via omapi) pertinent to the
+specified nodes that immediately takes effect without a restart of DHCP.
+
+If the B<-d> flag is used with the B<-a> flag then it will delete all nodes' dhcp host definitions.
+The B<-d> flag followed by a I<noderange> will delete the dhcp host definitons for the noderange.
+
+The B<makedhcp> command also uses the following attributes from the xCAT database:
+B<site.dhcpinterfaces>, B<site.domain>, B<networks.dynamicrange>, B<networks.dhcpserver>.  See
+the xcatdb man page for details about the database attributes.
+
+Note: This command is not supported for AIX clusters.
+
+
+=head1 OPTIONS
+
+=over 12
+
+=item B<-n>
+
+Create a new dhcpd.conf file with a network statement for each network dhcpd should listen on.
+The B<makedhcp> command will automatically restart dhcpd after this operation.
+
+=item B<-a>
+
+Define all nodes to the DHCP server.  (Will only add nodes that can be reached, network-wise, by
+this DHCP server.)  The dhcpd daemon does not have to be restarted after this.
+
+=item I<noderange>
+
+Add the specified nodes to the DHCP server configuration.
+
+=item [B<-s> I<statements>]
+
+For the input noderange, the argument will be interpreted like dhcpd.conf text.
+
+=item B<-a -d>
+
+Delete all nodes from the DHCP server configuration.
+
+=item B<-d> I<noderange>
+
+Delete all nodes in the noderange from the DHCP server configuration.
+
+=item B<-h>
+
+Display usage message.
+
+=back
+
+
+=head1 RETURN VALUE
+
+0 The command completed successfully.
+
+1 An error has occurred.
+
+
+=head1 EXAMPLES
+
+=over 3
+
+=item 1.
+
+Add the network definitions to DHCP by updating the dhcpd.conf file:
+
+ makedhcp -n
+
+=item 2.
+
+Define all nodes to the dhcp server:
+
+ makedhcp -a
+
+=item 3.
+
+Will cause dhcp on the next request to set root-path appropriately for only node5.  Note some characters (e.g. ") must be doubly escaped (once for the shell, and once for the OMAPI layer).
+
+ makedhcp node5 -s 'option root-path  \"172.16.0.1:/install/freebsd6.2/x86_64\";'
+
+=back
+
+
+=head1 SEE ALSO
+
+L<noderange(3)|noderange.3>
+

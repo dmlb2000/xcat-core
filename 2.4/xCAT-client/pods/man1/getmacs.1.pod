@@ -1,0 +1,144 @@
+=head1 NAME
+
+B<getmacs> - Collects node MAC address.
+
+=head1 SYNOPSIS
+
+=head2 Common:
+
+I<getmacs [-h| --help | -v| --version]>
+
+=head2 PPC specific:
+
+I<getmacs noderange [-F filter]>
+
+I<getmacs noderange [-V| --verbose] [-f] [-d] [--arp] | [-D [-S server] [-G gateway] [-C client]]>
+
+=head2 blade specific:
+
+I<getmacs noderange [-V| --verbose] [-d] [--arp]>
+
+=head1 DESCRIPTION
+
+The getmacs command collects MAC address from a single or range of nodes.
+Note that on AIX systems, the returned MAC address is not colon-seperated (for example 8ee2245cf004), while on Linux systems the MAC address is colon-seperated (for example 8e:e2:24:5c:f0:04).
+If no ping test performed,  getmacs writes the first adapter MAC to the xCAT database.  If ping test performed, getmacs will write the first successfully pinged MAC to xCAT database.
+
+Note: If network adapters are physically assigned to LPARs, getmacs cannot read the MAC addresses unless perform ping test, since there is no HMC command to read them and getmacs has to login to open formware. And if the LPARs has never been activated before, getmacs need to be performed with the option "-D" to get theirs MAC addresses.
+
+=head1 OPTIONS
+
+B<--arp>          Read MAC address with ARP protocal.
+
+B<-C>          Specify the IP address of the partition for ping test. The default is to read from xCAT database if no -C specified. 
+
+B<-d>          Display MAC only. The default is to write the first valid adapter MAC to the xCAT database.
+
+B<-D>          Perform ping test.  Please be aware that in this way, the lpars will be reset.
+
+B<-f>          Force immediate shutdown of the partition.
+
+B<-F>          Specify filters to select the correct adapter.  Acceptable filters are Type, MAC_Address, Phys_Port_Loc, Adapter, Port_Group, Phys_Port, Logical_Port, VLan, VSwitch, Curr_Conn_Speed.
+
+B<-G>          Gateway IP address of the partition.  The default is to read from xCAT database if no -G specified.
+
+B<-h>          Display usage message.
+
+B<-S>          The IP address of the machine to ping.  The default is to read from xCAT databse if no -S specified.
+
+B<-v>          Command Version.
+
+B<-V>          Verbose output.
+
+
+=head1 RETURN VALUE
+
+  0 The command completed successfully.
+
+  1 An error has occurred.
+
+
+=head1 EXAMPLES
+
+1. To retrieve the MAC address for the HMC-managed partition lpar4 and write the first valid adapter MAC to the xCAT database, enter:
+
+I<getmacs lpar4>
+
+Output is similar to:
+
+# Type     MAC_Address  Phys_Port_Loc  Adapter  Port_Group  Phys_Port  Logical_Port  VLan  VSwitch  Curr_Conn_Speed
+
+lpar4:
+
+#Type  MAC_Address  Phys_Port_Loc  Adapter  Port_Group  Phys_Port  Logical_Port  VLan  VSwitch  Curr_Conn_Speed
+
+hea  7607DFB07F02  N/A  N/A  N/A  N/A  N/A  1  ETHERNET0  N/A
+
+ent U78A1.001.99203B5-P1-T6   00145eb55788 /lhea@23c00614/ethernet@23e00514 unsuccessful physical
+
+
+2. To retrieve the MAC address with ARP protocal:
+
+I<getmacs lpar4 --arp>
+
+Output is similar to:
+
+lpar4:
+
+#IP           MAC_Address
+
+192.168.0.10  00145eb55788
+
+
+3. To retrieve the MAC address for the HMC-managed partition lpar4 and display the result only, enter:
+
+I<getmacs lpar4 -d>
+
+Output is similar to:
+
+lpar4:
+
+#Type  MAC_Address  Phys_Port_Loc  Adapter  Port_Group  Phys_Port  Logical_Port  VLan  VSwitch  Curr_Conn_Speed
+
+hea  7607DFB07F02  N/A  N/A  N/A  N/A  N/A  1  ETHERNET0  N/A
+
+ent U78A1.001.99203B5-P1-T6   00145eb55788 /lhea@23c00614/ethernet@23e00514 unsuccessful physical
+
+
+
+4. To retrieve the MAC address for the HMC-managed partition lpar4 with filter Type=hea,VSwitch=ETHERNET0.
+
+I<getmacs lpar4 -F Type=hea,VSwitch=ETHERNET0>
+
+Output is similar to:
+
+lpar4:
+
+#Type  MAC_Address  Phys_Port_Loc  Adapter  Port_Group  Phys_Port  Logical_Port  VLan  VSwitch  Curr_Conn_Speed
+
+hea  7607DFB07F02  N/A  N/A  N/A  N/A  N/A  1  ETHERNET0  N/A
+
+
+
+5. To retrieve the MAC address while performing a ping test for the HMC-managed partition lpar4 and display the result only, enter:
+
+I<getmacs lpar4 -d -D -S 9.3.6.49 -G 9.3.6.1 -C 9.3.6.234>
+
+#Type  Location Code   MAC Address      Full Path Name  Ping Result
+
+ent U9133.55A.10B7D1G-V12-C4-T1 8e:e2:24:5c:f0:04 /vdevice/l-lan@30000004 successful virtual
+
+=head1 FILES
+
+/opt/xcat/bin/getmacs
+
+
+=head1 SEE ALSO
+
+L<makedhcp(8)|makedhcp.8>
+
+
+
+
+
+

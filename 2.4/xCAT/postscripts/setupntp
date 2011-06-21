@@ -1,0 +1,113 @@
+#!/bin/sh
+# IBM(c) 2007 EPL license http://www.eclipse.org/legal/epl-v10.html
+#
+#---------------------------------------------------------------------------
+# setup NTP configuration on the compute nodes
+#
+#---------------------------------------------------------------------------
+master=$MASTER
+setup=0
+sitemaster=$SITEMASTER
+conf_file="/etc/ntp.conf"
+conf_file_org="/etc/ntp.conf.org"
+conf_file_backup="/etc/ntp.conf.postbackup"
+logger -t xcat "Install: Setup NTP"
+# if master is the sitemaster, then use the ntpservers defined in the site
+# table, if they exist. If they don't exist, do not setup ntp
+# else use the master which should be a service node
+if [ "$master" ==  "$sitemaster" ]; then
+  if [ $NTPSERVERS ]; then
+        if [ "$NODESETSTATE" == "statelite" ]; then
+            cp -a $conf_file $conf_file_org
+            echo  "" > $conf_file
+        else
+            if [ !  -f $conf_file_org ]; then
+                mv -f $conf_file $conf_file_org
+            else
+                mv -f $conf_file $conf_file_backup
+            fi
+        fi
+	for i in $(echo $NTPSERVERS | tr ',' ' ')
+	do
+ 	   echo "server $i" >>$conf_file
+	   master=$i
+	done 
+  else
+	logger -t xcat "Install: $NTPSERVERS don't exist"
+        exit 0	
+
+  fi
+else
+    if [ "$NODESETSTATE" == "statelite" ]; then
+        cp -a $conf_file $conf_file_org
+        echo  "" > $conf_file
+    else
+        if [ !  -f $conf_file_org ]; then
+            mv -f $conf_file $conf_file_org
+        else
+            mv -f $conf_file $conf_file_backup
+        fi
+    fi
+    echo "server $master" >$conf_file
+fi
+
+
+if [[ $OSTYPE = linux* ]]; then
+  mkdir -p /var/lib/ntp
+  chown ntp /var/lib/ntp
+  echo "driftfile /var/lib/ntp/drift
+disable auth
+restrict 127.0.0.1" >>$conf_file
+# default service for redhat/fedora
+SERVICE=ntpd
+echo $SERVICE
+if [[ $OSVER = sles* ]] || [[ $OSVER = suse* ]] || [[ -f /etc/SuSE-release ]]; then
+  SERVICE=ntp
+fi
+
+#service ntpd restart 
+  service $SERVICE stop 
+#ntpdate program is deprecated on SuSE
+if [[ $OSVER = sles* ]] || [[ $OSVER = suse* ]] || [[ -f /etc/SuSE-release ]]; then
+  logger -t xcat "ntpd -q -g"
+  ntpd -q -g
+  if [ "$?" != "0" ]
+        then
+            echo
+            echo "  ntpd -q -g failed"
+            logger -t xcat "ntpd -q -g failed"
+  fi
+else
+  logger -t xcat "ntpdate -t5 $master "
+  ntpdate -t5 $master 
+  if [ "$?" != "0" ]
+        then
+            echo
+            echo "  ntpdate -t5 $master  failed"
+            logger -t xcat "ntpdate -t5 $master failed"
+  fi
+fi
+
+  service $SERVICE start 
+  chkconfig --add  $SERVICE >/dev/null 2>&1
+  chkconfig --level 345 $SERVICE on >/dev/null 2>&1
+else
+# stop and start AIX ntp
+  echo "driftfile /etc/ntp.drift
+tracefile /etc/ntp.trace
+disable auth
+broadcastclient
+restrict 127.0.0.1" >>$conf_file
+
+  stopsrc -s xntpd 
+  logger -t xcat "ntpdate -t5 $master "
+  ntpdate -t5 $master 
+  if [ "$?" != "0" ]
+        then
+            echo
+            echo "  ntpdate -t5 $master  failed "
+            logger -t xcat "ntpdate -t5 $master failed"
+  fi
+  /usr/sbin/chrctcp -S -a xntpd 
+fi
+exit $? 

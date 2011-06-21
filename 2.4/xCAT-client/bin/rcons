@@ -1,0 +1,65 @@
+#!/bin/sh
+if [ -z "$1" ] || [ "$1" = "-h"  ]; then
+    echo "rcons - remotely accesses the serial console of a node"
+    echo "rcons <singlenode> [conserver] [-f]"
+    echo "rcons <singlenode> [conserver] [-s]"
+    echo "rcons [-h|--help|-v|--version]"
+    exit 0
+fi
+if [ "$1" = "-v"  ]; then
+    echo "Version 2.1"
+    exit 0
+fi
+
+if [ -n "$3" ] && [ "$3" = "-f" ]; then
+    FORCE=-f
+    CONSERVER=$2
+fi
+
+#console spy mode
+if [ -n "$3" ] && [ "$3" = "-s" ]; then
+    FORCE=-s
+    CONSERVER=$2
+fi
+
+if [ -n "$2" ] && [ "$2" = "-f" ]; then
+    FORCE=-f
+fi
+
+#console spy mode
+if [ -n "$2" ] && [ "$2" = "-s" ]; then
+    FORCE=-s
+fi
+
+if [ -z "$CONSERVER" ]; then
+        CONSERVER=`nodels $1 nodehm.conserver 2>/dev/null | awk -F: '{print $2}' | tr -d ' '`
+fi
+
+if [ -z "$CONSERVER" ]; then
+	CONSERVER=$XCATHOST
+fi
+if [ -z "$CONSERVER" ]; then
+	CONSERVER=localhost
+fi
+#NOTE: IPv6 is not good with the below if going by IP, needs more sophisticated
+#parsing
+CONSERVER=`echo $CONSERVER|cut -d: -f 1`
+
+#Detect console support of SSL, only fixup consolerc if encryption is detected
+if ! console -h 2>&1 | grep "encryption not compiled" > /dev/null; then
+    if [ ! -f $HOME/.consolerc ]; then
+	    echo 'config * {' > $HOME/.consolerc
+	    echo "	port 782;" >> $HOME/.consolerc
+	    echo "	sslenabled yes;" >> $HOME/.consolerc
+	    echo "	sslauthority $HOME/.xcat/ca.pem;" >> $HOME/.consolerc
+	    echo "	sslcredentials $HOME/.xcat/client-cred.pem;" >> $HOME/.consolerc
+	    echo '}' >> $HOME/.consolerc
+    fi
+else
+    # ssl is not enabled, comment out the ssl settings in .consolerc
+    if [ -f $HOME/.consolerc ]; then
+        sed -i 's/\Wssl/#ssl/1' $HOME/.consolerc
+    fi
+fi
+
+exec console $FORCE -M $CONSERVER $1

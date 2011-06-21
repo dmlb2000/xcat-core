@@ -1,0 +1,169 @@
+#!/usr/bin/perl
+#!/usr/bin/env perl
+# IBM(c) 2007 EPL license http://www.eclipse.org/legal/epl-v10.html
+BEGIN
+{
+   $::XCATROOT = $ENV{'XCATROOT'} ? $ENV{'XCATROOT'} : -d '/opt/xcat' ? '/opt/xcat' : '/usr';
+}
+use lib "$::XCATROOT/lib/perl";
+use IO::Socket::SSL;
+use XML::Simple;
+$XML::Simple::PREFERRED_PARSER='XML::Parser';
+use Data::Dumper;
+use IO::Handle;
+use IO::Select;
+use xCAT::Utils;
+use Getopt::Long;
+use POSIX qw(:signal_h :errno_h :sys_wait_h);
+use Thread qw(yield);
+my $interface;
+my $username;
+my $help;
+Getopt::Long::Configure("require_order");
+Getopt::Long::Configure("no_pass_through");
+if (!GetOptions(
+  "i|interface=s" => \$interface,
+  'l|loginname=s' => \$username,
+  "nonodecheck" => \$::NONODECHECK,  #does not check the noderange, in this case, noderange need to be a list of nodes.
+  'h|help' => \$help,
+  ) || $help || scalar(@ARGV)<2 ) {
+  print "Usage: psh [-i <interface>] [-l <user>] <noderange> <command>\n";
+  exit;
+}
+my %nodehdl;
+my $xcathost='localhost:3001';
+if ($ENV{XCATHOST}) {
+  $xcathost=$ENV{XCATHOST};
+}
+
+my $pshmaxp = 64; #TODO: should this be server dictated or local conf?
+my $noderange = $ARGV[0];
+my @nodes=();
+
+if ($::NONODECHECK) {
+  @nodes=split(/,/, $noderange);
+}
+else {
+  my $client = IO::Socket::SSL->new(
+                PeerAddr=>$xcathost,
+                SSL_key_file=>$ENV{HOME}."/.xcat/client-cred.pem",
+                SSL_cert_file=>$ENV{HOME}."/.xcat/client-cred.pem",
+                SSL_ca_file => $ENV{HOME}."/.xcat/ca.pem",
+                SSL_use_cert => 1,
+                #SSL_verify_mode => 1,
+             );
+  die "Connection failure: $!\n" unless ($client);
+  my %cmdref = (command => 'noderange', noderange => $noderange);
+  $SIG{ALRM} = sub { die "No response getting noderange" };
+  alarm(15);
+  print $client XMLout(\%cmdref,RootName=>'xcatrequest', NoAttr=>1, KeyAttr => []);
+  alarm(15);
+  my $response="";
+  while (<$client>) {
+    alarm(0);
+    $response .= $_;
+    if ($response =~ m/<\/xcatresponse>/) {
+      $rsp=XMLin($response, ForceArray => ['node']);
+      $response='';
+      if ($rsp->{warning}) {
+        printf "Warning: ".$rsp->{warning}."\n";
+      }
+      if ($rsp->{error}) {
+        die ("ERROR: ".$rsp->{error}."\n");
+      } elsif ($rsp->{node}) {
+        @nodes=@{$rsp->{node}};
+      }
+      if ($rsp->{serverdone}) {
+        last;
+      }
+    }
+  }
+  close($client);
+}
+
+my $children = 0;
+my $inputs = new IO::Select;
+my %pids; # pid => node
+my %exitcodes; # Keep a list of children with known exit codes
+my %foundcodes;
+
+if ($interface) {
+  foreach (@nodes) {
+    s/$/-$interface/;
+  }
+}
+foreach (@nodes) {
+  my $node=$_;
+  while ($children > $pshmaxp) { processoutput($inputs); }
+  my $child;
+  $children++;
+  sshnode(\$child,$node,$username,@ARGV[1 .. $#ARGV]);
+  $inputs->add($child);
+  $nodehdl{$child} = $node;
+}
+while ($inputs->count) {
+  processoutput($inputs);
+}
+while (processoutput($inputs)) {};
+while (wait != -1) {
+  yield;
+}
+my $exitcode=0;
+foreach (values %pids) {
+    my $possible_codes = join ",",keys %foundcodes;
+    unless (defined $exitcodes{$_}) {
+        print stderr "$_: *** psh missed exit code, probably one of the following: $possible_codes\n";
+    }
+}
+foreach (keys %exitcodes) {
+    if ($exitcodes{$_}) {
+        print stderr "$_: *** ssh exited with error code ".$exitcodes{$_}.".\n";
+        $exitcode++;
+    }
+}
+if ($exitcode) { #Exit code reflects number of failed nodes
+    $exitcode=$exitcode%256; #keep from overflowing valid values
+    unless ($exitcode) { #if number of failed nodes happened to be evenly divisible by 256, make it non-zero again
+        $exitcode++;
+    }
+}
+exit($exitcode);
+
+sub processoutput { #This way, one arbiter handles output, no interrupting
+  my $inputs = shift;
+  my @readyins = $inputs->can_read(1);
+  my $rc = @readyins;
+  my $readyh;
+  foreach $readyh (@readyins) {
+    my $cursel = new IO::Select;
+    $cursel->add($readyh);
+    while ($cursel->can_read(0)) {
+      my $line = <$readyh>;
+      unless ($line) {
+        $inputs->remove($readyh);
+        close($readyh);
+        $exitcodes{$nodehdl{$readyh}} = $? >> 8;
+        $children--;
+        next;
+      }
+      chomp($line);
+      print $nodehdl{$readyh}.": ".$line."\n";
+    }
+  }
+  IO::Handle::flush(stdout);
+  yield; #Explicitly give all children a chance to refill any buffers
+  return $rc;
+}
+sub sshnode {
+  my $out = shift;
+  my $node = shift;
+  my $username = shift;
+  if (length($username)) { $username = "-l $username"; }
+  my $in;
+  my $args = join(" ",@_);
+  #print "ssh -o BatchMode=yes $username $node " . xCAT::Utils->quote($args) . " 2>&1 |\n";
+  my $pid = open($$out,"ssh -o BatchMode=yes $username $node " . xCAT::Utils->quote($args) . " 2>&1 |");
+  $pids{$pid} = $node;
+}
+
+# vim: set et ts=2 sts=2 sw=2 :

@@ -1,0 +1,128 @@
+=head1 NAME
+
+B<rpower> - remote power control of nodes
+
+=head1 SYNOPSIS
+
+B<rpower> I<noderange> [B<--nodeps>] {B<on>|B<onstandby>|B<off>|B<suspend>|B<stat>|B<state>|B<reset>|B<boot>} [-m table.column==expectedstatus [-m table.column=~expectedstatus]] [-t timeout] [-r retrycount]
+
+B<rpower> [B<-h>|B<--help>|B<-v>|B<--version>]
+
+=head2 PPC (with IVM or HMC) specific:
+
+B<rpower> I<noderange> [B<--nodeps>] {B<of>}
+
+=head2 PPC (with HMC) specific:
+
+B<rpower> I<noderange> [B<onstandby>]
+
+=head2 Blade specific:
+
+B<rpower> I<noderange> [B<cycle>|B<softoff>] 
+
+=head1 DESCRIPTION
+
+B<rpower> controls the power for a single or range of nodes,  via the out-of-band path.
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<on>
+
+Turn power on.
+
+=item B<onstandby>
+
+Turn power on to standby state
+
+=item B<softoff>
+
+Attempt to request clean shutdown of OS (may not detect failures in completing command)
+
+=item B<off>
+
+Turn power off.
+
+=item B<suspend>
+
+Suspend the target nodes execution
+
+=item B<stat>|B<state>
+
+Print the current power state/status.
+
+=item B<reset>
+
+Send a hard reset.
+
+=item B<boot>
+
+If off, then power on.
+If on, then hard reset.
+This option is recommended over B<cycle>.
+
+=item B<cycle>
+
+Power off, then on.
+
+=item B<of>
+
+Boot the node to open firmware mode.
+
+=item B<-m table.column==expectedstatus -m table.column=~expectedstatus>
+
+Use one or multiple -m flags to specify the node attributes and the expected status for the node installation monitoring and automatic retry mechanism. The operators ==, !=, =~ and !~ are valid. This flag must be used with -t flag.
+
+Note: if the "val" fields includes spaces or any other characters that will be parsed by shell, the "attr<oper-ator>val" needs to be quoted. If the operator is "!~", the "attr<operator>val" needs to be quoted using single quote.
+
+=item B<--nodeps>
+
+Do not use dependency table (default is to use dependency table). Valid only with on|off|boot|reset|cycle for blade power method.
+
+=item B<-r retrycount>
+
+specify the number of retries that the monitoring process will perform before declare the failure. The default value is 3. Setting the retrycount to 0 means only monitoring the os installation progress and will not re-initiate the installation if the node status has not been changed to the expected value after timeout. This flag must be used with -m flag.
+
+=item B<-t timeout>
+
+Specify the the timeout, in minutes, to wait for the expectedstatus specified by -m flag. This is a required flag if the -m flag is specified.
+
+Power off, then on.
+
+=item B<-h>|B<--help>
+
+Prints out a brief usage message.
+
+=item B<-v>, B<--version>
+
+Display the version number.
+
+=back
+
+
+=head1 EXAMPLES
+
+=over 3
+
+=item *
+
+B<rpower> I<node4,node5 stat>
+
+ node4: on
+ node5: off
+
+=item *
+
+B<rpower> I<node5 on>
+
+ node5: on
+
+=back
+
+
+=head1 SEE ALSO
+
+L<noderange(3)|noderange.3>, L<rcons(1)|rcons.1>, L<rinv(1)|rinv.1>, L<rvitals(1)|rvitals.1>, L<rscan(1)|rscan.1>
+
+

@@ -1,0 +1,25 @@
+#!/bin/sh
+# IBM(c) 2007 EPL license http://www.eclipse.org/legal/epl-v10.html
+#egan@us.ibm.com
+#(C)IBM Corp
+#
+
+if [ ! -x /usr/bin/openssl ]; then
+   logger -t xcat "$0: /usr/bin/openssl is not executable"
+   exit 0
+fi
+USEOPENSSLFORXCAT=1
+export USEOPENSSLFORXCAT
+   allowcred.awk &
+   CREDPID=$!
+   sleep 1
+   mkdir -p /etc/xcat/cert
+   getcredentials.awk xcat_server_cred | grep -v '<'|sed -e 's/&lt;/</' -e 's/&gt;/>/' -e 's/&amp;/&/' -e 's/&quot/"/' -e "s/&apos;/'/" > /etc/xcat/cert/server-cred.pem
+   chmod 600 /etc/xcat/cert/*
+   getcredentials.awk xcat_cfgloc | grep -v '<'|sed -e 's/&lt;/</' -e 's/&gt;/>/' -e 's/&amp;/&/' -e 's/&quot/"/' -e "s/&apos;/'/" > /etc/xcat/cfgloc
+    sed s/host=[^\|]*/host=$MASTER/ /etc/xcat/cfgloc > /etc/xcat/cfgloc.new
+    mv /etc/xcat/cfgloc.new /etc/xcat/cfgloc
+   chmod 600 /etc/xcat/cfgloc
+   # do not assume working directory, use the full path
+   cp /xcatpost/_xcat/ca.pem /etc/xcat/cert/ca.pem
+   kill -9 $CREDPID

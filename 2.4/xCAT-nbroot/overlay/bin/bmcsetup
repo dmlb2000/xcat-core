@@ -1,0 +1,219 @@
+# IBM(c) 2007 EPL license http://www.eclipse.org/legal/epl-v10.html
+#
+# Raw commands to set BMCs to defaults
+#   dx320
+#     0x2e 0x10 0x4d 0x4f 0x00 0xff
+#
+#   dx340 
+#     0x30 0x13 0xff 0x00 0x00 0x00
+#
+#   dx360/x3450
+#     0x30 0x02 0x43 0x4c 0x52 0xaa
+#     0x08 0x00 0x49 0x4e 0x54 0x45 0x4c
+#     0x08 0x04
+#
+allowcred.awk &
+CREDPID=$!
+modprobe ipmi_si
+modprobe ipmi_devintf
+while [ -z "$BMCIP" ]; do
+    while ! getipmi
+    do
+        echo "Retrying retrieval of IPMI settings from server"
+    done
+    TIMEOUT=15
+    kill $CREDPID
+    BMCIP=`grep bmcip /tmp/ipmi.data |awk -F\> '{print $2}'|awk -F\< '{print $1}'`
+    BMCGW=`grep gateway /tmp/ipmi.data |awk -F\> '{print $2}'|awk -F\< '{print $1}'`
+    BMCNM=`grep netmask /tmp/ipmi.data |awk -F\> '{print $2}'|awk -F\< '{print $1}'`
+    BMCUS=`grep username /tmp/ipmi.data |awk -F\> '{print $2}'|awk -F\< '{print $1}'`
+    BMCPW=`grep password /tmp/ipmi.data |awk -F\> '{print $2}'|awk -F\< '{print $1}'`
+    if [ -z "$BMCIP" ]; then
+        echo "FAILED TO RETRIEVE SETTINGS, RETRYING in 15 seconds"
+        sleep 15
+    fi
+
+    echo "Attempting to locate correct lan channel"
+
+    for LANCHAN in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do 
+      if ipmitool channel info $LANCHAN | grep 802.3 > /dev/null; 
+        then break; 
+      fi; 
+    done
+    
+    echo "Using lan channel $LANCHAN"
+done
+IPMIVER=`ipmitool mc info|grep ^IPMI|awk  '{print $4}'`
+IPMIMFG=`ipmitool mc info|grep "^Manufacturer ID"|awk  '{print $4}'`
+if [ "$IPMIMFG" == 2 ]; then #IBM
+    IBMFAM=`ipmitool raw 0x3a 0x50 |head -n 1| awk '{print $1 $2 $3 $4}'`
+    if [ "$IBMFAM" == "59554f4f" ]; then
+        #BMC YUOO family insists that username change on each set
+        if [ -z "$BMCUS" ]; then #blank user, set to foo first
+            ipmitool user set name 2 "foo";
+        else
+            TEMPUSER=`echo $BMCUS|sed -e \'s/'^.//'`
+            if [ -z "$TEMPUSER" ]; then #was one character, set it to foo first
+                ipmitool user set name 2 "foo";
+            else #still non blank, can use tempuser as safe temporary value
+                ipmitool user set name 2 $TEMPUSER
+            fi
+        fi
+        BMCPORT=`grep bmcport /tmp/ipmi.data |awk -F\> '{print $2}'|awk -F\< '{print $1}'`
+        if [ ! -z "$BMCPORT" ]; then
+            ipmitool raw 0xc 1 1 0xc0 $BMCPORT
+        fi
+    fi
+fi
+        
+TRIES=0
+while ! ipmitool lan set $LANCHAN ipsrc static; do
+    sleep 1
+    let TRIES=TRIES+1
+    if [ $TRIES -gt $TIMEOUT ]; then break; fi
+done
+TRIES=0
+while ! ipmitool lan set $LANCHAN ipaddr $BMCIP; do
+    sleep 1
+    let TRIES=TRIES+1
+    if [ $TRIES -gt $TIMEOUT ]; then break; fi
+done
+TRIES=0
+while ! ipmitool lan set $LANCHAN netmask $BMCNM; do
+    sleep 1
+    let TRIES=TRIES+1
+    if [ $TRIES -gt $TIMEOUT ]; then break; fi
+done
+TRIES=0
+if [ ! -z "$BMCGW" ]; then
+    while ! ipmitool lan set $LANCHAN defgw ipaddr $BMCGW; do
+        sleep 1
+        let TRIES=TRIES+1
+        if [ $TRIES -gt $TIMEOUT ]; then break; fi
+    done
+    TRIES=0
+fi
+while ! ipmitool user disable 1; do
+    sleep 1
+    let TRIES=TRIES+1
+    if [ $TRIES -gt $TIMEOUT ]; then break; fi
+done
+TRIES=0
+while ! ipmitool user disable 3; do
+    sleep 1
+    let TRIES=TRIES+1
+    if [ $TRIES -gt $TIMEOUT ]; then break; fi
+done
+TRIES=0
+while ! ipmitool user disable 4; do
+    sleep 1
+    let TRIES=TRIES+1
+    if [ $TRIES -gt $TIMEOUT ]; then break; fi
+done
+TRIES=0
+while ! ipmitool user enable 2; do
+    sleep 1
+    let TRIES=TRIES+1
+    if [ $TRIES -gt $TIMEOUT ]; then break; fi
+done
+TRIES=0
+# Last param in ipmitool user priv is the channel to set it on.
+# Penguin boxes are all channel 2
+while ! ipmitool user priv 2 4 $LANCHAN; do
+    sleep 1
+    let TRIES=TRIES+1
+    if [ $TRIES -gt $TIMEOUT ]; then break; fi
+done
+TRIES=0
+while ! ipmitool user set name 2 $BMCUS; do
+    sleep 1
+    let TRIES=TRIES+1
+    if [ $TRIES -gt $TIMEOUT ]; then break; fi
+done
+TRIES=0
+while ! ipmitool user set password 2 $BMCPW; do
+    sleep 1
+    let TRIES=TRIES+1
+    if [ $TRIES -gt $TIMEOUT ]; then break; fi
+done
+TRIES=0
+echo "Set up following user table: "
+ipmitool user list 1
+
+
+echo "Enabling Channel $LANCHAN: "
+while ! ipmitool raw 0x6 0x40 $LANCHAN 0x42 0x44; do
+    sleep 1
+    let TRIES=TRIES+1
+    if [ $TRIES -gt $TIMEOUT ]; then break; fi
+done
+TRIES=0
+while ! ipmitool raw 0x6 0x40 $LANCHAN 0x82 0x84; do
+    sleep 1
+    let TRIES=TRIES+1
+    if [ $TRIES -gt $TIMEOUT ]; then break; fi
+done
+TRIES=0
+
+echo -n "Enabling ARP responses: "
+while ! ipmitool lan set $LANCHAN arp respond on; do
+    sleep 1
+    let TRIES=TRIES+1
+    echo -n .
+    if [ $TRIES -gt $TIMEOUT ]; then break; fi
+done
+TRIES=0
+echo
+
+echo "Enabling IPMI v 1.5 MD5 LAN access:"
+while ! ipmitool lan set $LANCHAN auth admin md5; do
+    sleep 1
+    let TRIES=TRIES+1
+    if [ $TRIES -gt $TIMEOUT ]; then break; fi
+done
+TRIES=0
+if [ ! "$IPMIVER" == "1.5"  ]; then 
+    echo "Enabling IPMI v 2.0 LAN access:"
+    SUPPORTEDSUITES=`ipmitool lan print $LANCHAN|grep Suites|awk -F: '{print $2}'|sed -e 's/ 0//'`
+    PRIVS="X"
+    for priv in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
+        if echo $SUPPORTEDSUITES|grep $priv > /dev/null; then
+            PRIVS="$PRIVS"a
+        else
+            PRIVS="$PRIVS"X
+        fi
+    done
+    while ! ipmitool lan set $LANCHAN cipher_privs $PRIVS; do
+        sleep 1
+        let TRIES=TRIES+1
+    if [ $TRIES -gt $TIMEOUT ]; then break; fi
+    done
+    TRIES=0
+
+    echo "Enabling SOL for channel $LANCHAN"
+    while ! ipmitool raw 0xc 0x21 $LANCHAN 0x1 0x1; do
+        sleep 1
+        let TRIES=TRIES+1
+        if [ $TRIES -gt $TIMEOUT ]; then break; fi
+    done
+    TRIES=0
+    
+    echo "Enabling SOL for user 2"
+    while ! ipmitool raw 6 0x4c $LANCHAN 2 2 0 0 0; do
+        sleep 1
+        let TRIES=TRIES+1
+        if [ $TRIES -gt $TIMEOUT ]; then break; fi
+    done
+fi
+
+allowcred.awk &
+CREDPID=$!
+#frume.awk
+kill $CREDPID
+
+echo "Lighting Identify Light"
+while :
+    do ipmitool raw 0 4 10 > /dev/null
+    sleep 5
+done &
+

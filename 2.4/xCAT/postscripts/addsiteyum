@@ -1,0 +1,15 @@
+#!/bin/sh
+cd `dirname $0`
+if [ ! -d repos/$OSVER/$ARCH ];  then
+   logger -t xcat "repos/$OSVER/$ARCH is not a directory"
+   exit;
+fi
+for i in repos/$OSVER/$ARCH/*
+do
+   if [ ! -r "$i" ]; then
+      continue
+   fi
+   TARGFILE=`basename $i`
+   TARGFILE=`echo $TARGFILE|sed -e s/.tmpl$/.repo/`
+   sed -e s!#INSTSERVER#!$MASTER! $i > /etc/yum.repos.d/$TARGFILE
+done

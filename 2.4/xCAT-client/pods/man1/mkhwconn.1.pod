@@ -1,0 +1,94 @@
+=head1 NAME
+
+B<mkhwconn> - Sets up connections for FSP and BPA nodes to HMC nodes.
+
+=head1 SYNOPSIS
+
+B<mkhwconn> [B<-h>| B<--help>]
+
+B<mkhwconn> [B<-v>| B<--version>]
+
+B<mkhwconn> [B<-V>| B<--verbose>] noderange B<-t>
+
+B<mkhwconn> [B<-V>| B<--verbose>] noderange B<-p> hmc [B<-P> passwd]
+
+=head1 DESCRIPTION
+
+This command is used to set up connections for FSP and BPA nodes to HMC nodes. (If the connection already exists, it will not break it.)
+This command is useful when you have multiple HMCs, each of which will manage a subset of the FSPs/BPAs.  Use B<mkhwconn> to tell
+each HMC which FSPs/BPAs it should manage.  When using this, you should turn off the self-discovery on each HMC.  You also need
+to put all the HMCs and all the BPAs on a single flat service network.
+
+When -t is specified, this command reads the connection information from the xCAT ppc table (e.g. the parent attribute), and read the user/password from the ppcdirect table. Then this command will assign FSP nodes and BPA nodes to HMC nodes. 
+
+When -p is specified, this command gets the connection information from command line arguments. If -P is not specified, the default password for FSP and BPA nodes is used.
+
+In any case, before running this command, the FSP and BPA nodes need be defined with correct nodetype.nodetype value (fsp or bpa) and nodehm.mgt value (hmc).
+
+Note: If a CEC (FSP) belongs to a frame, which has a BPA installed, this CEC should not be assigned to an HMC individually. Instead, the whole frame (BPA) should be assigned to the HMC.
+
+=head1 OPTIONS
+
+=over 5
+
+=item B<-h|--help>
+
+Display usage message.
+
+=item B<-t>
+
+Read connection information from xCAT DB (ppc and ppcdirect tables).  Use this option if you need to connect multiple FSPs/BPAs
+to multiple HMCs in a single command.
+
+=item B<-p>
+
+The HMC node name. Only one HMC nodes can be specified by this flag. To setup connection for multiple HMC nodes, use flag -t.
+
+=item B<-P>
+
+The password of HMC based FSP/BPA login user(Default user name is 'HMC'). This flag is optional.
+
+=item B<-V|--verbose>
+
+Verbose output.
+
+=back
+
+=head1 RETURN VALUE
+
+0 The command completed successfully.
+
+1 An error has occurred.
+
+=head1 EXAMPLES
+
+=over 3
+
+=item 1.
+
+To setup the connection for all FSP nodes in node group fsp, according to the definition in xCAT DB:
+
+ mkhwconn fsp -t
+
+=item 2.
+
+To setup the connection for BPA nodes in node group frame_grp1 to HMC node hmc1, with password 'abc123':
+
+ mkhwconn frame_grp1 -p hmc1 -P abc123
+
+=back
+
+=head1 FILES
+
+$XCATROOT/bin/mkhwconn
+
+(The XCATROOT environment variable is set when xCAT is installed. The
+default value is "/opt/xcat".)
+
+=head1 NOTES
+
+This command is part of the xCAT software product.
+
+=head1 SEE ALSO
+
+L<lshwconn(1)|lshwconn.1>, L<rmhwconn(1)|rmhwconn.1>

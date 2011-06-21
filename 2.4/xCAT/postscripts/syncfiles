@@ -1,0 +1,60 @@
+#!/bin/sh
+# IBM(c) 2009 EPL license http://www.eclipse.org/legal/epl-v10.html
+#####################################################
+#
+#   Initiate the xdcp from Mangement node to sync 
+#   files to this node
+#
+#####################################################
+
+# do nothing when UPDATENODE=1 because it is done from the top down
+if [[ $UPDATENODE -eq 1 ]]; then
+   echo "  Did not sync any files."
+   exit 0
+fi
+
+#do nothing id there is no sync file template for the node
+if [[ $NOSYNCFILES -eq 1 ]]; then
+   echo "  Did not sync any files."
+   logger -t xCAT "$0: there is no sync file template for the node"
+   exit 0
+fi
+
+# do nothing for diskless deployment case because it is done in the image already
+if [ "$NODESETSTATE" = "netboot" -o \
+     "$NODESETSTATE" = "statelite" -o \
+     "$NODESETSTATE" = "diskless" -o \
+     "$NODESETSTATE" = "dataless" ] 
+then
+   echo "  Did not sync any files."
+   logger -t xCAT "$0: the node set state is $NODESETSTATE"
+   exit 0
+fi
+
+
+logger -t xCAT "Performing syncfiles postscript"
+
+osname=`uname`
+# run the xdcp on the MN/SN
+xcatpostdir="/xcatpost"
+
+logger -t xCAT "$0: the OS name = $osname"
+if [ $osname = "Linux" ] 
+then
+`$xcatpostdir/startsyncfiles.awk`
+returncode=$?
+elif [ $osname = "AIX" ]
+then
+`$xcatpostdir/startsyncfiles.aix`
+returncode=$?
+fi
+
+if [ $returncode -eq 1 ]
+then
+  logger -t xCAT "$0: Perform Syncing File action successfully"
+else
+  logger -t xCAT "$0: Perform Syncing File action encountered error"
+fi
+
+exit 0
+
