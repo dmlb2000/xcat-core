@@ -3426,12 +3426,11 @@ sub validate_datastore_prereqs_inlock {
                     }
                     $server = inet_ntoa($servern);
                     my $uri = "nfs://$server/$path";
-					unless ($hyphash{$hyp}->{datastoremap}->{$uri}) { #If not already there, must mount it
+                    unless ($hyphash{$hyp}->{datastoremap}->{$uri}) { #If not already there, must mount it
 						unless ($datastoreautomount) {
-								xCAT::SvrUtils::sendmsg([1,":) $uri is not currently accessible at the given location and automount is disabled in site table"], $output_handler,$node);
+								xCAT::SvrUtils::sendmsg([1,": $uri is not currently accessible at the given location and automount is disabled in site table"], $output_handler,$node);
 								return 0;
 						}
-                    unless ($hyphash{$hyp}->{datastoremap}->{$uri}) { #If not already there, must mount it
                         $refresh_names=1;
                         ($hyphash{$hyp}->{datastoremap}->{$uri},$hyphash{$hyp}->{datastorerefmap}->{$uri})=mount_nfs_datastore($hostview,$location);
                     }
