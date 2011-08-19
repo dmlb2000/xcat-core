@@ -3980,6 +3980,7 @@ sub mknetboot {
 		}
 		my $tp = "xcat/netboot/$osver/$arch/$shortprofname";
         my $bail=0;
+     	my $append;
         foreach (@reqmods) {
             unless (-r "$tftpdir/$tp/$_") { 
                 xCAT::SvrUtils::sendmsg([1,"$_ is missing from the target destination, ensure that either copycds has been run or that $custprofpath contains this file"], $output_handler);
@@ -3995,7 +3996,7 @@ sub mknetboot {
 		if ($reqmods[0] eq "vmkboot.gz") {
 			$prepend = "$tp/vmkboot.gz";
 	        delete $mods{"vmkboot.gz"};
-			my $append = " --- $tp/vmk.gz";
+			$append = " --- $tp/vmk.gz";
 	        delete $mods{"vmk.gz"};
 			$append .= " --- $tp/sys.vgz";
 	        delete $mods{"sys.vgz"};
